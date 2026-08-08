@@ -4,6 +4,7 @@ import { createEdgeArrowProgram } from "sigma/rendering";
 import type { Attributes } from "graphology-types";
 import type { App } from "obsidian";
 import {
+  BASE_EDGE_SIZE,
   CONTOUR_DRAW_DELAY,
   CONTOUR_MIN_EDGE_FACTOR,
   CONTOUR_NODE_DELAY,
@@ -105,7 +106,7 @@ function edgeAttrs(edge: GraphEdge, settings: ContourGraphSettings): EdgeAttrs {
   return {
     kind: edge.kind,
     weight: Math.max(0.001, edge.weight),
-    size: settings.graph.lineSize,
+    size: BASE_EDGE_SIZE * settings.graph.lineSize,
     color: DEFAULT_EDGE_COLOR,
     hidden: edge.hidden,
     type: settings.graph.showArrow ? "arrow" : "line"

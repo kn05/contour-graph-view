@@ -11,7 +11,9 @@ import type { Point } from "./types";
 
 export function contourAlpha(depth: number, maxDepth: number, opacity: number): number {
   const range = Math.max(1, maxDepth);
-  const factor = CONTOUR_STYLE.parentAlpha + depth / range * CONTOUR_STYLE.childAlpha;
+  const ratio = Math.min(1, Math.max(0, depth / range));
+  const factor = CONTOUR_STYLE.parentAlpha
+    + Math.pow(ratio, CONTOUR_STYLE.depthPower) * CONTOUR_STYLE.childAlpha;
   return Math.min(MAX_CONTOUR_ALPHA, Math.max(MIN_CONTOUR_ALPHA, opacity * factor));
 }
 

@@ -1,7 +1,7 @@
 import { DirectedGraph } from "graphology";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_SETTINGS } from "../src/contour-graph/constants";
-import { LayoutRunner, mapLayoutOpts } from "../src/contour-graph/layout";
+import { DEFAULT_SETTINGS, LAYOUT_OPTS } from "../src/contour-graph/constants";
+import { easeLayoutPoint, LayoutRunner, mapLayoutOpts } from "../src/contour-graph/layout";
 
 interface NodeAttrs {
   x: number;
@@ -92,11 +92,23 @@ describe("layout worker lifecycle", () => {
     runner.start(DEFAULT_SETTINGS);
     const reducer = stats.reducer;
     if (reducer === null) throw new Error("The worker reducer was not registered.");
-    expect(reducer("A", { x: 9, y: 9, size: 4, fixed: false }).x).toBe(9);
+    const next = reducer("A", { x: 9, y: 9, size: 4, fixed: false });
+    expect(next.x).toBeGreaterThan(1);
+    expect(Math.hypot(next.x - 1, next.y - 2)).toBeLessThanOrEqual(LAYOUT_OPTS.maxNodeStep);
     runner.stop();
     expect(reducer("A", { x: 99, y: 99, size: 4, fixed: false })).toEqual(
       graph.getNodeAttributes("A")
     );
+  });
+
+  it("eases small moves and caps large worker jumps", () => {
+    expect(easeLayoutPoint({ x: 0, y: 0 }, { x: 1, y: 0 })).toEqual({
+      x: LAYOUT_OPTS.moveEase,
+      y: 0
+    });
+    const point = easeLayoutPoint({ x: 0, y: 0 }, { x: 100, y: 100 });
+    expect(Math.hypot(point.x, point.y)).toBeCloseTo(LAYOUT_OPTS.maxNodeStep);
+    expect(easeLayoutPoint({ x: 2, y: 3 }, { x: Number.NaN, y: 4 })).toEqual({ x: 2, y: 3 });
   });
 
   it("normalizes Core Graph forces to ForceAtlas2 ranges", () => {

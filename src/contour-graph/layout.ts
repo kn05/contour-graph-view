@@ -8,11 +8,24 @@ import {
   LAYOUT_SAVE_DELAY
 } from "./constants";
 import { GenGate } from "./generation";
-import type { ContourGraphSettings } from "./types";
+import type { ContourGraphSettings, Point } from "./types";
 
 export interface LayoutHooks {
   save: () => void;
   showError: (message: string) => void;
+}
+
+export function easeLayoutPoint(current: Point, next: Point): Point {
+  if (!Number.isFinite(next.x) || !Number.isFinite(next.y)) return current;
+  const dx = next.x - current.x;
+  const dy = next.y - current.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance === 0) return next;
+  const ratio = Math.min(LAYOUT_OPTS.moveEase, LAYOUT_OPTS.maxNodeStep / distance);
+  return {
+    x: current.x + dx * ratio,
+    y: current.y + dy * ratio
+  };
 }
 
 export function mapLayoutOpts(settings: ContourGraphSettings, order: number): ForceAtlas2Settings {
@@ -42,7 +55,7 @@ export function mapLayoutOpts(settings: ContourGraphSettings, order: number): Fo
   };
 }
 
-export class LayoutRunner<NodeAttrs extends Attributes, EdgeAttrs extends Attributes> {
+export class LayoutRunner<NodeAttrs extends Attributes & Point, EdgeAttrs extends Attributes> {
   private layout: FA2Layout<NodeAttrs, EdgeAttrs> | null = null;
   private stopTimer: number | null = null;
   private saveTimer: number | null = null;
@@ -61,8 +74,11 @@ export class LayoutRunner<NodeAttrs extends Attributes, EdgeAttrs extends Attrib
       this.layout = new FA2Layout<NodeAttrs, EdgeAttrs>(this.graph, {
         getEdgeWeight: "weight",
         outputReducer: (id: string, attrs: NodeAttrs): NodeAttrs => {
-          if (this.gen.isCurrent(gen) || !this.graph.hasNode(id)) return attrs;
-          return this.graph.getNodeAttributes(id);
+          if (!this.graph.hasNode(id)) return attrs;
+          const current = this.graph.getNodeAttributes(id);
+          if (!this.gen.isCurrent(gen)) return current;
+          const point = easeLayoutPoint(current, attrs);
+          return { ...attrs, ...point };
         },
         settings: mapLayoutOpts(settings, this.graph.order)
       });
