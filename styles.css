@@ -14,10 +14,10 @@
   gap: var(--size-2-2);
   padding: var(--size-2-2);
   border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-m);
-  background: color-mix(in srgb, var(--background-primary) 82%, transparent);
+  border-radius: var(--radius-l);
+  background: color-mix(in srgb, var(--background-primary) 78%, transparent);
   box-shadow: var(--shadow-s);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(16px) saturate(1.15);
 }
 
 .contour-graph-tool {
@@ -40,16 +40,17 @@
   transform: translate(-50%, -50%);
   pointer-events: none;
   overflow: hidden;
-  padding: 4px 8px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-s);
-  background: color-mix(in srgb, var(--background-primary) 88%, transparent);
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 72%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--background-primary) 82%, transparent);
   color: var(--text-normal);
   font-size: var(--font-ui-smaller);
-  font-weight: var(--font-semibold);
+  font-weight: var(--font-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
   box-shadow: var(--shadow-s);
+  backdrop-filter: blur(16px) saturate(1.12);
 }
 
 .contour-graph-error {
@@ -66,7 +67,7 @@
   outline: none;
 }
 
-.contour-graph-view .sigma-contours {
+.contour-graph-view .sigma-regions {
   pointer-events: none;
 }
 

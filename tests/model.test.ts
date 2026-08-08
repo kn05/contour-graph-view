@@ -67,6 +67,7 @@ describe("vault graph model", () => {
     expect(regions.get("/A/B/C")).toEqual(["A/B/C/Deep.md"]);
     expect(result.value.nodes.some((node) => node.id === "folder:/")).toBe(true);
     expect(result.value.nodes.some((node) => node.id === "folder:/A/B/C")).toBe(true);
+    expect(result.value.nodes.find((node) => node.id === "folder:/A/B/C")?.label).toBe("C");
     expect(result.value.edges).toContainEqual(expect.objectContaining({
       source: "folder:/",
       target: "folder:/A",

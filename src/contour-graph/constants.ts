@@ -2,7 +2,7 @@ import type { ContourGraphSettings } from "./types";
 
 export const VIEW_TYPE = "contour-graph-view";
 export const VIEW_NAME = "Contour Graph View";
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 export const ROOT_FOLDER = "/";
 export const FOLDER_PREFIX = "folder:";
 export const TAG_PREFIX = "tag:";
@@ -25,7 +25,7 @@ export const NODE_SIZE_OPTS = {
   base: 0.76,
   degreeStep: 0.24,
   max: 2.4,
-  folderFactor: 1.12,
+  folderFactor: 1.02,
   mutedFactor: 0.82
 } as const;
 export const REGION_OPTS = {
@@ -65,8 +65,8 @@ export const LAYOUT_OPTS = {
 } as const;
 
 export const RENDER_OPTS = {
-  labelDensity: 0.75,
-  labelBase: 6,
+  labelDensity: 0.62,
+  labelBase: 7,
   labelFadeFactor: 2,
   minEdgeThickness: 0.5,
   stagePadding: 40,
@@ -85,12 +85,18 @@ export const STAGE_OPTS = {
 } as const;
 
 export const REGION_STYLE = {
-  maxAlpha: 0.18,
-  activeFill: 1.8,
-  borderAlpha: 0.34,
-  activeBorderAlpha: 0.8,
-  activeWidth: 1.5,
-  idleWidth: 0.75
+  maxAlpha: 0.13,
+  activeFill: 2.1,
+  borderAlpha: 0.12,
+  activeBorderAlpha: 0.68,
+  activeWidth: 1.25,
+  idleWidth: 0.5,
+  fadeStart: 0.54,
+  fadeMid: 0.8,
+  fadeMidAlpha: 0.48,
+  fadeEdgeAlpha: 0.07,
+  outerBorderAlpha: 0.14,
+  outerWidth: 0.75
 } as const;
 
 export const DEFAULT_SETTINGS: ContourGraphSettings = {
@@ -113,8 +119,8 @@ export const DEFAULT_SETTINGS: ContourGraphSettings = {
     colorGroups: []
   },
   folder: {
-    regionOpacity: 0.065,
-    regionPadding: 18,
+    regionOpacity: 0.045,
+    regionPadding: 12,
     excluded: [],
     colors: {}
   },

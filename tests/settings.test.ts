@@ -130,6 +130,27 @@ describe("plugin settings", () => {
     });
   });
 
+  it("softens the previous default region appearance without changing custom values", () => {
+    const previousDefaults = migrateSettings({
+      schemaVersion: 5,
+      folder: { regionOpacity: 0.065, regionPadding: 18 }
+    });
+    expect(previousDefaults.ok).toBe(true);
+    if (!previousDefaults.ok) return;
+    expect(previousDefaults.value.folder).toEqual({
+      regionOpacity: DEFAULT_SETTINGS.folder.regionOpacity,
+      regionPadding: DEFAULT_SETTINGS.folder.regionPadding
+    });
+
+    const customized = migrateSettings({
+      schemaVersion: 5,
+      folder: { regionOpacity: 0.08, regionPadding: 30 }
+    });
+    expect(customized.ok).toBe(true);
+    if (!customized.ok) return;
+    expect(customized.value.folder).toEqual({ regionOpacity: 0.08, regionPadding: 30 });
+  });
+
   it("imports only validated Core Graph values and skips unsupported searches", () => {
     const result = parseCoreGraph({
       showTags: true,

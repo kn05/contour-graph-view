@@ -191,12 +191,24 @@ function migrateV4(value: RawMap): RawMap {
   return { ...value, folder, schemaVersion: 5 };
 }
 
+function migrateV5(value: RawMap): RawMap {
+  const folder = isMap(value.folder) ? { ...value.folder } : {};
+  if (folder.regionOpacity === 0.065) {
+    folder.regionOpacity = DEFAULT_SETTINGS.folder.regionOpacity;
+  }
+  if (folder.regionPadding === 18) {
+    folder.regionPadding = DEFAULT_SETTINGS.folder.regionPadding;
+  }
+  return { ...value, folder, schemaVersion: 6 };
+}
+
 const MIGRATIONS: Readonly<Record<number, (value: RawMap) => RawMap>> = {
   0: migrateV0,
   1: migrateV1,
   2: migrateV2,
   3: migrateV3,
-  4: migrateV4
+  4: migrateV4,
+  5: migrateV5
 };
 
 export function migrateSettings(value: unknown): Result<RawMap> {

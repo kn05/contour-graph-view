@@ -12,6 +12,7 @@ import {
   fileFolder,
   folderChain,
   folderColor,
+  folderLabel,
   initialPoint,
   isFolderExcluded,
   parentFolder,
@@ -299,7 +300,7 @@ function ensureFolderNode(
   const point = initialPoint(id);
   nodes.set(id, {
     id,
-    label: folder,
+    label: folderLabel(folder),
     kind: "folder",
     path: null,
     folder,

@@ -18,7 +18,7 @@ import {
 import { anchorId } from "./folders";
 import { LayoutRunner } from "./layout";
 import { buildRegionPartition, buildRegionPath, regionFrame } from "./regions";
-import type { RegionBoundary, RegionSeed } from "./regions";
+import type { RegionBoundary, RegionFrame, RegionSeed } from "./regions";
 import { planNodeStage, stageBatchSize } from "./staging";
 import type {
   ContourGraphSettings,
@@ -149,6 +149,7 @@ export class GraphRenderer {
   private regionTime = 0;
   private regions: DrawnRegion[] = [];
   private boundaries: RegionBoundary[] = [];
+  private mapFrame: RegionFrame | null = null;
   private regionAt: (point: Point) => string | null = () => null;
   private activeFolder: string | null = null;
   private activePoint: Point | null = null;
@@ -477,6 +478,7 @@ export class GraphRenderer {
     if (frame === null || seeds.length === 0) {
       this.regions = [];
       this.boundaries = [];
+      this.mapFrame = null;
       this.regionAt = () => null;
       this.paintRegions();
       return;
@@ -493,6 +495,7 @@ export class GraphRenderer {
       }];
     });
     this.boundaries = partition.boundaries;
+    this.mapFrame = frame;
     this.regionAt = partition.pathAt;
     this.paintRegions();
   }
@@ -539,6 +542,8 @@ export class GraphRenderer {
         );
       }
     }
+    this.applyRegionMask();
+    this.strokeMapBoundary(borderColor);
     this.ctx.globalAlpha = 1;
     this.drawLabel();
   }
@@ -564,6 +569,43 @@ export class GraphRenderer {
     this.ctx.globalAlpha = alpha;
     this.ctx.strokeStyle = color;
     this.ctx.lineWidth = width;
+    this.ctx.stroke();
+  }
+
+  private applyRegionMask(): void {
+    const frame = this.mapFrame;
+    if (frame === null) return;
+    const { center, radius } = frame;
+    const gradient = this.ctx.createRadialGradient(
+      center.x,
+      center.y,
+      0,
+      center.x,
+      center.y,
+      radius
+    );
+    gradient.addColorStop(0, "rgba(0, 0, 0, 1)");
+    gradient.addColorStop(REGION_STYLE.fadeStart, "rgba(0, 0, 0, 1)");
+    gradient.addColorStop(REGION_STYLE.fadeMid, `rgba(0, 0, 0, ${REGION_STYLE.fadeMidAlpha})`);
+    gradient.addColorStop(1, `rgba(0, 0, 0, ${REGION_STYLE.fadeEdgeAlpha})`);
+    this.ctx.save();
+    this.ctx.globalAlpha = 1;
+    this.ctx.globalCompositeOperation = "destination-in";
+    this.ctx.fillStyle = gradient;
+    this.ctx.beginPath();
+    this.ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.restore();
+  }
+
+  private strokeMapBoundary(color: string): void {
+    const frame = this.mapFrame;
+    if (frame === null) return;
+    this.ctx.beginPath();
+    this.ctx.arc(frame.center.x, frame.center.y, frame.radius, 0, Math.PI * 2);
+    this.ctx.globalAlpha = REGION_STYLE.outerBorderAlpha;
+    this.ctx.strokeStyle = color;
+    this.ctx.lineWidth = REGION_STYLE.outerWidth;
     this.ctx.stroke();
   }
 

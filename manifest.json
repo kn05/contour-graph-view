@@ -1,9 +1,9 @@
 {
   "id": "contour-graph-view",
   "name": "Contour Graph View",
-  "version": "0.1.0-beta.13",
+  "version": "0.1.0-beta.14",
   "minAppVersion": "1.8.0",
-  "description": "Explore links and folder hierarchies in node-anchored circular regions.",
+  "description": "Explore links and folder hierarchies in calm, node-anchored regions.",
   "author": "kn05",
   "isDesktopOnly": true
 }

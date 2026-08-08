@@ -1,6 +1,8 @@
 import { FOLDER_PREFIX, ROOT_FOLDER } from "./constants";
 import type { FolderRegion, Point } from "./types";
 
+const FOLDER_HUES = [4, 30, 48, 142, 174, 199, 215, 244, 272, 300, 332] as const;
+
 export function normalizeFolder(path: string): string {
   const parts = path.split("/").filter((part) => part.length > 0);
   return parts.length === 0 ? ROOT_FOLDER : `/${parts.join("/")}`;
@@ -66,6 +68,12 @@ export function anchorId(path: string): string {
   return `${FOLDER_PREFIX}${normalizeFolder(path)}`;
 }
 
+export function folderLabel(path: string): string {
+  const folder = normalizeFolder(path);
+  if (folder === ROOT_FOLDER) return "Vault";
+  return folder.split("/").at(-1) ?? folder;
+}
+
 export function hashText(text: string): number {
   let hash = 2_166_136_261;
   for (let index = 0; index < text.length; index += 1) {
@@ -84,11 +92,19 @@ export function initialPoint(id: string): Point {
 
 export function folderColor(path: string, custom: Record<string, string>, isDark = true): string {
   const folder = normalizeFolder(path);
-  const saved = custom[folder];
-  if (saved !== undefined) return saved;
-  const hue = hashText(folder) % 360;
-  const lightness = isDark ? 62 : 42;
-  return `hsl(${hue} 66% ${lightness}%)`;
+  let cursor: string | null = folder;
+  while (cursor !== null) {
+    const saved = custom[cursor];
+    if (saved !== undefined) return saved;
+    cursor = cursor === ROOT_FOLDER ? null : parentFolder(cursor);
+  }
+  if (folder === ROOT_FOLDER) return isDark ? "hsl(215 18% 68%)" : "hsl(215 16% 48%)";
+  const family = topFolder(folder);
+  const hue = FOLDER_HUES[hashText(family) % FOLDER_HUES.length] ?? 215;
+  const tone = (hashText(folder) >>> 8) % 7 - 3;
+  const saturation = isDark ? 54 : 48;
+  const lightness = (isDark ? 68 : 46) + tone;
+  return `hsl(${hue} ${saturation}% ${lightness}%)`;
 }
 
 export function sortRegions(regions: readonly FolderRegion[]): FolderRegion[] {

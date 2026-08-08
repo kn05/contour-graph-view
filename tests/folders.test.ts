@@ -5,6 +5,7 @@ import {
   folderChain,
   folderColor,
   folderDepth,
+  folderLabel,
   initialPoint,
   isFolderExcluded,
   compactFolders,
@@ -39,11 +40,19 @@ describe("folder paths", () => {
     expect(isFolderExcluded("/Other/Meta", excluded)).toBe(false);
   });
 
-  it("uses the full folder path for identity and color", () => {
+  it("uses full paths for identity but concise folder labels", () => {
     expect(anchorId("/One/Shared")).not.toBe(anchorId("/Two/Shared"));
-    expect(folderColor("/One/Shared", {})).not.toBe(folderColor("/Two/Shared", {}));
-    expect(folderColor("/One", {}, false)).toMatch(/42%\)$/u);
+    expect(folderLabel("/One/Shared")).toBe("Shared");
+    expect(folderLabel("/")).toBe("Vault");
+  });
+
+  it("keeps folder families in one palette and inherits color overrides", () => {
+    const parent = folderColor("/One", {});
+    const child = folderColor("/One/Shared", {});
+    expect(/^hsl\((\d+)/u.exec(parent)?.[1]).toBe(/^hsl\((\d+)/u.exec(child)?.[1]);
+    expect(folderColor("/One", {}, false)).toMatch(/ 48% /u);
     expect(folderColor("/One", { "/One": "#123456" })).toBe("#123456");
+    expect(folderColor("/One/Shared", { "/One": "#123456" })).toBe("#123456");
   });
 
   it("places new nodes deterministically", () => {

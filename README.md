@@ -30,6 +30,8 @@ graph links. The region layer never applies layout forces, so the visible
 graph structure—not the colored regions—determines where nodes settle. Each
 file is guaranteed a cell in its direct-folder region, and adjacent cells from
 the same folder render as one surface without overlapping translucent layers.
+Related folders share a restrained color family, while a radial fade keeps the
+outer map quiet and the graph itself visually dominant.
 
 ## Development
 
