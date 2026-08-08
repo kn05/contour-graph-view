@@ -15,6 +15,10 @@ export interface LayoutHooks {
   showError: (message: string) => void;
 }
 
+interface LayoutNode extends Point {
+  fixed: boolean;
+}
+
 export function easeLayoutPoint(current: Point, next: Point): Point {
   if (!Number.isFinite(next.x) || !Number.isFinite(next.y)) return current;
   const dx = next.x - current.x;
@@ -68,7 +72,7 @@ export function mapLayoutOpts(settings: ContourGraphSettings, order: number): Fo
   };
 }
 
-export class LayoutRunner<NodeAttrs extends Attributes & Point, EdgeAttrs extends Attributes> {
+export class LayoutRunner<NodeAttrs extends Attributes & LayoutNode, EdgeAttrs extends Attributes> {
   private layout: FA2Layout<NodeAttrs, EdgeAttrs> | null = null;
   private stopTimer: number | null = null;
   private saveTimer: number | null = null;
@@ -87,6 +91,13 @@ export class LayoutRunner<NodeAttrs extends Attributes & Point, EdgeAttrs extend
 
   setSmoothing(isSmooth: boolean): void {
     this.isSmooth = isSmooth;
+  }
+
+  setPoint(id: string, point: Point): void {
+    if (!this.graph.hasNode(id) || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
+    const next = { x: point.x, y: point.y };
+    this.points.set(id, next);
+    this.targets.set(id, next);
   }
 
   start(settings: ContourGraphSettings): void {
@@ -112,6 +123,10 @@ export class LayoutRunner<NodeAttrs extends Attributes & Point, EdgeAttrs extend
             this.points.set(id, point);
             this.targets.set(id, point);
             return attrs;
+          }
+          if (attrs.fixed) {
+            this.targets.set(id, current);
+            return { ...attrs, ...current };
           }
           this.targets.set(id, easeLayoutPoint(current, attrs));
           return { ...attrs, ...current };

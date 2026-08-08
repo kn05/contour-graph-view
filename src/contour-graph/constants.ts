@@ -22,6 +22,7 @@ export const MAX_FOLDER_PATH_LENGTH = 1_024;
 export const BASE_NODE_SIZE = 6;
 export const BASE_EDGE_SIZE = 1.6;
 export const FOLDER_EDGE_WEIGHT = 0.18;
+export const UNLINKED_FOLDER_FACTOR = 4;
 export const PARENT_EDGE_FACTOR = 0.5;
 export const CONTOUR_POINTS = 6;
 export const CONTOUR_CAPSULE_POINTS = 32;

@@ -5,6 +5,7 @@ import {
   PARENT_EDGE_FACTOR,
   ROOT_FOLDER,
   TAG_PREFIX,
+  UNLINKED_FOLDER_FACTOR,
   UNRESOLVED_PREFIX
 } from "./constants";
 import {
@@ -236,6 +237,12 @@ function addFolders(
   });
   const isDark = usesDarkTheme();
   const weight = settings.graph.linkStrength * settings.folder.clusterStrength;
+  const linked = new Set<string>();
+  for (const edge of edges.values()) {
+    if (edge.kind !== "link") continue;
+    linked.add(edge.source);
+    linked.add(edge.target);
+  }
 
   for (const file of files) {
     const chain = folderChain(file.folder ?? ROOT_FOLDER, null);
@@ -256,7 +263,7 @@ function addFolders(
       source: file.id,
       target: directId,
       kind: "folder",
-      weight,
+      weight: linked.has(file.id) ? weight : weight * UNLINKED_FOLDER_FACTOR,
       hidden: true
     });
   }

@@ -325,9 +325,11 @@ export class GraphRenderer {
       this.dragNode = node;
       this.didDrag = false;
       this.cancelHover();
+      this.finishStage();
       this.layout.stop();
       this.sigma.getCamera().disable();
       this.graph.setNodeAttribute(node, "fixed", true);
+      this.layout.start(this.settings);
     });
 
     this.container.addEventListener("pointermove", (event) => this.onPointerMove(event), {
@@ -395,6 +397,7 @@ export class GraphRenderer {
     const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
     if (this.dragNode !== null) {
       const graphPoint = this.sigma.viewportToGraph(point);
+      this.layout.setPoint(this.dragNode, graphPoint);
       this.graph.mergeNodeAttributes(this.dragNode, { x: graphPoint.x, y: graphPoint.y, fixed: true });
       this.didDrag = true;
       this.sigma.refresh({ partialGraph: { nodes: [this.dragNode] }, skipIndexation: false });

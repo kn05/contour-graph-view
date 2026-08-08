@@ -142,6 +142,22 @@ describe("layout worker lifecycle", () => {
     runner.kill();
   });
 
+  it("tracks a dragged fixed point while the worker keeps running", () => {
+    const graph = makeGraph();
+    const runner = new LayoutRunner(graph, { save: () => undefined, showError: () => undefined });
+    runner.start(DEFAULT_SETTINGS);
+    runner.setPoint("A", { x: 20, y: 30 });
+    const reducer = stats.reducer;
+    if (reducer === null) throw new Error("The worker reducer was not registered.");
+    expect(reducer("A", { x: 2, y: 3, size: 4, fixed: true })).toEqual({
+      x: 20,
+      y: 30,
+      size: 4,
+      fixed: true
+    });
+    runner.kill();
+  });
+
   it("eases small moves and caps large worker jumps", () => {
     expect(easeLayoutPoint({ x: 0, y: 0 }, { x: 1, y: 0 })).toEqual({
       x: LAYOUT_OPTS.moveEase,

@@ -1,6 +1,6 @@
 {
   "name": "contour-graph-view",
-  "version": "0.1.0-beta.6",
+  "version": "0.1.0-beta.7",
   "description": "A folder-aware contour graph view for Obsidian.",
   "type": "module",
   "main": "main.js",

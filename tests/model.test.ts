@@ -1,6 +1,10 @@
 import type { App, TFile } from "obsidian";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS } from "../src/contour-graph/constants";
+import {
+  DEFAULT_SETTINGS,
+  FOLDER_EDGE_WEIGHT,
+  UNLINKED_FOLDER_FACTOR
+} from "../src/contour-graph/constants";
 import { buildGraph, dropPositions, movePosition } from "../src/contour-graph/model";
 import type { ContourGraphSettings, SavedPoint } from "../src/contour-graph/types";
 
@@ -136,6 +140,25 @@ describe("vault graph model", () => {
       return edge.kind === "folder" && edge.source.startsWith("00_Meta/");
     })).toBe(false);
     expect(result.value.folders.some((folder) => folder.path.startsWith("/00_Meta"))).toBe(false);
+  });
+
+  it("keeps unlinked notes closer to their folder anchor", () => {
+    const app = makeApp({
+      files: [
+        makeFile("Folder/Linked.md"),
+        makeFile("Folder/Target.md"),
+        makeFile("Folder/Unlinked.md")
+      ],
+      resolved: { "Folder/Linked.md": { "Folder/Target.md": 1 } }
+    });
+    const result = buildGraph(app, makeSettings());
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const folderEdges = result.value.edges.filter((edge) => edge.kind === "folder");
+    const linked = folderEdges.find((edge) => edge.source === "Folder/Linked.md");
+    const unlinked = folderEdges.find((edge) => edge.source === "Folder/Unlinked.md");
+    expect(linked?.weight).toBeCloseTo(FOLDER_EDGE_WEIGHT);
+    expect(unlinked?.weight).toBeCloseTo(FOLDER_EDGE_WEIGHT * UNLINKED_FOLDER_FACTOR);
   });
 
   it("moves and deletes file or folder position subtrees", () => {
