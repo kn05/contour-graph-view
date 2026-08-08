@@ -12,7 +12,8 @@ import {
   DEFAULT_LABEL_COLOR,
   MAX_CONTOUR_DELAY,
   NODE_COLORS,
-  RENDER_OPTS
+  RENDER_OPTS,
+  STAGE_OPTS
 } from "./constants";
 import {
   buildContour,
@@ -24,6 +25,7 @@ import {
 } from "./contours";
 import { expandPoint, folderDepth } from "./folders";
 import { LayoutRunner } from "./layout";
+import { planNodeStage, stageBatchSize } from "./staging";
 import type {
   ContourGraphSettings,
   FolderGroup,
@@ -87,7 +89,7 @@ function labelThreshold(settings: ContourGraphSettings): number {
   return Math.max(1, RENDER_OPTS.labelBase + settings.graph.textFade * RENDER_OPTS.labelFadeFactor);
 }
 
-function nodeAttrs(node: GraphNode): NodeAttrs {
+function nodeAttrs(node: GraphNode, isStaged = false): NodeAttrs {
   return {
     label: node.label,
     kind: node.kind,
@@ -97,7 +99,7 @@ function nodeAttrs(node: GraphNode): NodeAttrs {
     y: node.y,
     size: node.size,
     color: node.color,
-    hidden: node.hidden,
+    hidden: node.hidden || isStaged,
     fixed: node.fixed
   };
 }
@@ -113,10 +115,14 @@ function edgeAttrs(edge: GraphEdge, settings: ContourGraphSettings): EdgeAttrs {
   };
 }
 
-function mapGraph(model: GraphModel, settings: ContourGraphSettings): DirectedGraph<NodeAttrs, EdgeAttrs> {
+function mapGraph(
+  model: GraphModel,
+  settings: ContourGraphSettings,
+  staged: ReadonlySet<string>
+): DirectedGraph<NodeAttrs, EdgeAttrs> {
   const graph = new DirectedGraph<NodeAttrs, EdgeAttrs>({ allowSelfLoops: false });
   for (const node of model.nodes) {
-    graph.addNode(node.id, nodeAttrs(node));
+    graph.addNode(node.id, nodeAttrs(node, staged.has(node.id)));
   }
   for (const edge of model.edges) {
     if (!graph.hasNode(edge.source) || !graph.hasNode(edge.target)) continue;
@@ -133,6 +139,9 @@ export class GraphRenderer {
   private readonly label: HTMLDivElement;
   private readonly abort = new AbortController();
   private readonly layout: LayoutRunner<NodeAttrs, EdgeAttrs>;
+  private readonly stageIds: string[];
+  private stageIndex = 0;
+  private stageTimer: number | null = null;
   private contourTimer: number | null = null;
   private contourFrame: number | null = null;
   private hoverFrame: number | null = null;
@@ -153,7 +162,8 @@ export class GraphRenderer {
     private readonly hooks: RenderHooks
   ) {
     if (!supportsWebGL2()) throw new Error("Contour Graph View requires WebGL2.");
-    this.graph = mapGraph(model, settings);
+    this.stageIds = planNodeStage(model);
+    this.graph = mapGraph(model, settings, new Set(this.stageIds));
     this.layout = new LayoutRunner(this.graph, {
       save: () => this.persistPositions(),
       showError: (message) => this.hooks.showError(message)
@@ -183,6 +193,7 @@ export class GraphRenderer {
     this.bindEvents();
     this.setCamera();
     this.drawContours();
+    this.startStage();
     this.layout.start(this.settings);
   }
 
@@ -192,12 +203,14 @@ export class GraphRenderer {
 
   restartLayout(): void {
     if (this.isKilled) return;
+    this.finishStage();
     this.layout.stop();
     this.layout.start(this.settings);
   }
 
   update(model: GraphModel, settings: ContourGraphSettings): void {
     if (this.isKilled) return;
+    this.finishStage();
     this.layout.stop();
     const didScaleChange = settings.graph.scale !== this.settings.graph.scale;
     this.model = model;
@@ -218,6 +231,7 @@ export class GraphRenderer {
     if (this.isKilled) return;
     this.persistPositions();
     this.isKilled = true;
+    this.clearStage();
     this.layout.kill();
     if (this.contourTimer !== null) window.clearTimeout(this.contourTimer);
     if (this.contourFrame !== null) window.cancelAnimationFrame(this.contourFrame);
@@ -229,6 +243,48 @@ export class GraphRenderer {
     this.abort.abort();
     this.sigma.kill();
     this.label.remove();
+  }
+
+  private startStage(): void {
+    if (this.stageIds.length === 0) return;
+    this.layout.setSmoothing(false);
+    this.stageTimer = window.setTimeout(() => {
+      this.stageTimer = null;
+      this.layout.setSmoothing(true);
+      this.revealStage();
+    }, STAGE_OPTS.warmupDelay);
+  }
+
+  private revealStage(): void {
+    if (this.isKilled || this.stageIndex >= this.stageIds.length) return;
+    const end = Math.min(
+      this.stageIds.length,
+      this.stageIndex + stageBatchSize(this.stageIds.length)
+    );
+    for (; this.stageIndex < end; this.stageIndex += 1) {
+      const id = this.stageIds[this.stageIndex];
+      if (id !== undefined && this.graph.hasNode(id)) this.graph.setNodeAttribute(id, "hidden", false);
+    }
+    if (this.stageIndex < this.stageIds.length) {
+      this.stageTimer = window.setTimeout(() => {
+        this.stageTimer = null;
+        this.revealStage();
+      }, STAGE_OPTS.batchDelay);
+    }
+  }
+
+  private finishStage(): void {
+    this.clearStage();
+    this.layout.setSmoothing(true);
+    for (; this.stageIndex < this.stageIds.length; this.stageIndex += 1) {
+      const id = this.stageIds[this.stageIndex];
+      if (id !== undefined && this.graph.hasNode(id)) this.graph.setNodeAttribute(id, "hidden", false);
+    }
+  }
+
+  private clearStage(): void {
+    if (this.stageTimer !== null) window.clearTimeout(this.stageTimer);
+    this.stageTimer = null;
   }
 
   private setCamera(): void {

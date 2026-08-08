@@ -60,6 +60,8 @@ export class LayoutRunner<NodeAttrs extends Attributes & Point, EdgeAttrs extend
   private stopTimer: number | null = null;
   private saveTimer: number | null = null;
   private readonly gen = new GenGate();
+  private readonly points = new Map<string, Point>();
+  private isSmooth = true;
   private isKilled = false;
 
   constructor(
@@ -67,17 +69,27 @@ export class LayoutRunner<NodeAttrs extends Attributes & Point, EdgeAttrs extend
     private readonly hooks: LayoutHooks
   ) {}
 
+  setSmoothing(isSmooth: boolean): void {
+    this.isSmooth = isSmooth;
+  }
+
   start(settings: ContourGraphSettings): void {
     if (this.isKilled || this.graph.order === 0 || this.layout !== null) return;
     const gen = this.gen.next();
+    this.points.clear();
+    this.graph.forEachNode((id, attrs) => {
+      this.points.set(id, { x: attrs.x, y: attrs.y });
+    });
     try {
       this.layout = new FA2Layout<NodeAttrs, EdgeAttrs>(this.graph, {
         getEdgeWeight: "weight",
         outputReducer: (id: string, attrs: NodeAttrs): NodeAttrs => {
           if (!this.graph.hasNode(id)) return attrs;
-          const current = this.graph.getNodeAttributes(id);
-          if (!this.gen.isCurrent(gen)) return current;
-          const point = easeLayoutPoint(current, attrs);
+          const current = this.points.get(id);
+          if (current === undefined) return attrs;
+          if (!this.gen.isCurrent(gen)) return { ...attrs, ...current };
+          const point = this.isSmooth ? easeLayoutPoint(current, attrs) : attrs;
+          this.points.set(id, { x: point.x, y: point.y });
           return { ...attrs, ...point };
         },
         settings: mapLayoutOpts(settings, this.graph.order)

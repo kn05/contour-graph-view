@@ -64,6 +64,15 @@ export const RENDER_OPTS = {
   cameraDuration: 250
 } as const;
 
+export const STAGE_OPTS = {
+  minNodes: 12,
+  warmupDelay: 280,
+  batchDelay: 8,
+  singleNodeLimit: 240,
+  targetSteps: 90,
+  maxBatch: 192
+} as const;
+
 export const CONTOUR_STYLE = {
   parentAlpha: 0.08,
   childAlpha: 0.92,

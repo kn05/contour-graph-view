@@ -92,13 +92,32 @@ describe("layout worker lifecycle", () => {
     runner.start(DEFAULT_SETTINGS);
     const reducer = stats.reducer;
     if (reducer === null) throw new Error("The worker reducer was not registered.");
-    const next = reducer("A", { x: 9, y: 9, size: 4, fixed: false });
+    const raw = graph.getNodeAttributes("A");
+    raw.x = 9;
+    raw.y = 9;
+    const next = reducer("A", raw);
     expect(next.x).toBeGreaterThan(1);
     expect(Math.hypot(next.x - 1, next.y - 2)).toBeLessThanOrEqual(LAYOUT_OPTS.maxNodeStep);
+    graph.replaceNodeAttributes("A", next);
     runner.stop();
-    expect(reducer("A", { x: 99, y: 99, size: 4, fixed: false })).toEqual(
-      graph.getNodeAttributes("A")
-    );
+    const stale = reducer("A", { x: 99, y: 99, size: 4, fixed: false });
+    expect(stale).toEqual(graph.getNodeAttributes("A"));
+  });
+
+  it("can settle hidden nodes without smoothing before reveal", () => {
+    const graph = makeGraph();
+    const runner = new LayoutRunner(graph, { save: () => undefined, showError: () => undefined });
+    runner.setSmoothing(false);
+    runner.start(DEFAULT_SETTINGS);
+    const reducer = stats.reducer;
+    if (reducer === null) throw new Error("The worker reducer was not registered.");
+    expect(reducer("A", { x: 90, y: 80, size: 4, fixed: false })).toEqual({
+      x: 90,
+      y: 80,
+      size: 4,
+      fixed: false
+    });
+    runner.kill();
   });
 
   it("eases small moves and caps large worker jumps", () => {
