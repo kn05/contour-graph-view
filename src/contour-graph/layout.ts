@@ -7,8 +7,13 @@ import {
   LAYOUT_RUN_TIME,
   LAYOUT_SAVE_DELAY
 } from "./constants";
+import {
+  buildCohesionShifts,
+  buildFolderShifts,
+  type FolderPoint
+} from "./folder-forces";
+import { topFolder } from "./folders";
 import { GenGate } from "./generation";
-import { buildFolderShifts, type FolderPoint } from "./separation";
 import type { ContourGraphSettings, Point } from "./types";
 
 export interface LayoutHooks {
@@ -19,6 +24,10 @@ export interface LayoutHooks {
 interface LayoutNode extends Point {
   fixed: boolean;
   folder?: string | null;
+  kind?: string;
+}
+
+interface LayoutEdge {
   kind?: string;
 }
 
@@ -75,7 +84,10 @@ export function mapLayoutOpts(settings: ContourGraphSettings, order: number): Fo
   };
 }
 
-export class LayoutRunner<NodeAttrs extends Attributes & LayoutNode, EdgeAttrs extends Attributes> {
+export class LayoutRunner<
+  NodeAttrs extends Attributes & LayoutNode,
+  EdgeAttrs extends Attributes & LayoutEdge
+> {
   private layout: FA2Layout<NodeAttrs, EdgeAttrs> | null = null;
   private stopTimer: number | null = null;
   private saveTimer: number | null = null;
@@ -84,7 +96,9 @@ export class LayoutRunner<NodeAttrs extends Attributes & LayoutNode, EdgeAttrs e
   private readonly targets = new Map<string, Point>();
   private motionFrame: number | null = null;
   private motionTime: number | null = null;
+  private attractionStrength = 0;
   private separationStrength = 0;
+  private externalNodes = new Set<string>();
   private isSmooth = true;
   private isKilled = false;
 
@@ -107,7 +121,9 @@ export class LayoutRunner<NodeAttrs extends Attributes & LayoutNode, EdgeAttrs e
   start(settings: ContourGraphSettings): void {
     if (this.isKilled || this.graph.order === 0 || this.layout !== null) return;
     const gen = this.gen.next();
+    this.attractionStrength = settings.folder.clusterStrength;
     this.separationStrength = settings.folder.separationStrength;
+    this.externalNodes = this.collectExternalNodes();
     this.points.clear();
     this.targets.clear();
     this.graph.forEachNode((id, attrs) => {
@@ -194,6 +210,7 @@ export class LayoutRunner<NodeAttrs extends Attributes & LayoutNode, EdgeAttrs e
       if (!this.gen.isCurrent(gen) || this.layout === null || this.isKilled) return;
       const elapsed = this.motionTime === null ? LAYOUT_OPTS.frameBaseDelay : time - this.motionTime;
       this.motionTime = time;
+      const frame = elapsed / LAYOUT_OPTS.frameBaseDelay;
       const moves = new Map<string, Point>();
       const folderPoints: FolderPoint[] = [];
       this.graph.forEachNode((id, attrs) => {
@@ -202,20 +219,30 @@ export class LayoutRunner<NodeAttrs extends Attributes & LayoutNode, EdgeAttrs e
         const isAnchor = attrs.kind === "folder";
         const isFile = attrs.kind === "file" || attrs.kind === "attachment";
         if (!isAnchor && !isFile) return;
-        folderPoints.push({ id, folder: attrs.folder, isAnchor, ...point });
+        folderPoints.push({
+          id,
+          folder: attrs.folder,
+          isAnchor,
+          isExternal: this.externalNodes.has(id),
+          isFixed: attrs.fixed,
+          ...point
+        });
       });
-      const shifts = buildFolderShifts(folderPoints, this.separationStrength);
+      const folderShifts = buildFolderShifts(folderPoints, this.separationStrength, frame);
+      const nodeShifts = buildCohesionShifts(folderPoints, this.attractionStrength, frame);
       for (const [id, current] of this.points) {
         const target = this.targets.get(id);
         if (target === undefined || !this.graph.hasNode(id)) continue;
         const attrs = this.graph.getNodeAttributes(id);
         const tweened = tweenLayoutPoint(current, target, elapsed);
-        const shift = attrs.fixed || typeof attrs.folder !== "string"
+        const folderShift = attrs.fixed || typeof attrs.folder !== "string"
           ? undefined
-          : shifts.get(attrs.folder);
-        const point = shift === undefined
-          ? tweened
-          : { x: tweened.x + shift.x, y: tweened.y + shift.y };
+          : folderShifts.get(topFolder(attrs.folder));
+        const nodeShift = attrs.fixed ? undefined : nodeShifts.get(id);
+        const point = {
+          x: tweened.x + (folderShift?.x ?? 0) + (nodeShift?.x ?? 0),
+          y: tweened.y + (folderShift?.y ?? 0) + (nodeShift?.y ?? 0)
+        };
         if (point.x === current.x && point.y === current.y) continue;
         this.points.set(id, point);
         moves.set(id, point);
@@ -232,6 +259,23 @@ export class LayoutRunner<NodeAttrs extends Attributes & LayoutNode, EdgeAttrs e
       this.motionFrame = window.requestAnimationFrame(move);
     };
     this.motionFrame = window.requestAnimationFrame(move);
+  }
+
+  private collectExternalNodes(): Set<string> {
+    const folders = new Map<string, string>();
+    const nodes = new Set<string>();
+    this.graph.forEachNode((id, attrs) => {
+      const isFile = attrs.kind === "file" || attrs.kind === "attachment";
+      if (isFile && typeof attrs.folder === "string") folders.set(id, attrs.folder);
+    });
+    this.graph.forEachEdge((_id, attrs, source, target) => {
+      if (attrs.kind === "folder") return;
+      const sourceFolder = folders.get(source);
+      const targetFolder = folders.get(target);
+      if (sourceFolder !== undefined && sourceFolder !== targetFolder) nodes.add(source);
+      if (targetFolder !== undefined && targetFolder !== sourceFolder) nodes.add(target);
+    });
+    return nodes;
   }
 
   private stopMotion(): void {

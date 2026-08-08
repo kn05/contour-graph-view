@@ -18,6 +18,13 @@ export function parentFolder(path: string): string {
   return parts.length === 0 ? ROOT_FOLDER : `/${parts.join("/")}`;
 }
 
+export function topFolder(path: string): string {
+  const folder = normalizeFolder(path);
+  if (folder === ROOT_FOLDER) return ROOT_FOLDER;
+  const top = folder.slice(1).split("/")[0];
+  return top === undefined ? ROOT_FOLDER : `/${top}`;
+}
+
 export function fileFolder(path: string): string {
   const split = path.lastIndexOf("/");
   return split < 0 ? ROOT_FOLDER : normalizeFolder(path.slice(0, split));

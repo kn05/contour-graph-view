@@ -9,7 +9,8 @@ import {
   isFolderExcluded,
   compactFolders,
   normalizeFolder,
-  parentFolder
+  parentFolder,
+  topFolder
 } from "../src/contour-graph/folders";
 
 describe("folder paths", () => {
@@ -20,6 +21,8 @@ describe("folder paths", () => {
     expect(fileFolder("Work/Note.md")).toBe("/Work");
     expect(parentFolder("/Work/Active")).toBe("/Work");
     expect(parentFolder("/Work")).toBe("/");
+    expect(topFolder("/Work/Active/Now")).toBe("/Work");
+    expect(topFolder("/")).toBe("/");
     expect(folderDepth("/Work/Active")).toBe(2);
   });
 

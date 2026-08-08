@@ -1,11 +1,17 @@
-import { ROOT_FOLDER, SEPARATION_OPTS } from "./constants";
-import { normalizeFolder } from "./folders";
+import {
+  COHESION_OPTS,
+  ROOT_FOLDER,
+  SEPARATION_OPTS
+} from "./constants";
+import { normalizeFolder, topFolder } from "./folders";
 import type { Point } from "./types";
 
 export interface FolderPoint extends Point {
   id: string;
   folder: string;
   isAnchor: boolean;
+  isExternal: boolean;
+  isFixed: boolean;
 }
 
 interface FolderBox {
@@ -15,21 +21,27 @@ interface FolderBox {
   halfHeight: number;
 }
 
-function isNested(left: string, right: string): boolean {
-  return left.startsWith(`${right}/`) || right.startsWith(`${left}/`);
+interface CohesionGroup {
+  anchor: FolderPoint | null;
+  nodes: FolderPoint[];
 }
 
-function clampShift(point: Point): Point {
+function clampShift(point: Point, max: number): Point {
   const distance = Math.hypot(point.x, point.y);
-  if (distance <= SEPARATION_OPTS.maxShift || distance === 0) return point;
-  const ratio = SEPARATION_OPTS.maxShift / distance;
+  if (distance <= max || distance === 0) return point;
+  const ratio = max / distance;
   return { x: point.x * ratio, y: point.y * ratio };
+}
+
+function frameScale(scale: number): number {
+  if (!Number.isFinite(scale) || scale <= 0) return 0;
+  return Math.min(COHESION_OPTS.maxFrameScale, scale);
 }
 
 function buildBoxes(points: readonly FolderPoint[]): FolderBox[] {
   const groups = new Map<string, { nodes: FolderPoint[]; hasAnchor: boolean }>();
   for (const point of points) {
-    const path = normalizeFolder(point.folder);
+    const path = topFolder(point.folder);
     if (path === ROOT_FOLDER) continue;
     const group = groups.get(path) ?? { nodes: [], hasAnchor: false };
     if (point.isAnchor) group.hasAnchor = true;
@@ -65,9 +77,11 @@ function buildBoxes(points: readonly FolderPoint[]): FolderBox[] {
 
 export function buildFolderShifts(
   points: readonly FolderPoint[],
-  strength: number
+  strength: number,
+  scale = 1
 ): Map<string, Point> {
-  if (!Number.isFinite(strength) || strength <= 0) return new Map();
+  const frame = frameScale(scale);
+  if (!Number.isFinite(strength) || strength <= 0 || frame === 0) return new Map();
   const boxes = buildBoxes(points);
   const shifts = new Map<string, Point>();
   const add = (box: FolderBox, x: number, y: number): void => {
@@ -86,7 +100,6 @@ export function buildFolderShifts(
       const leftEdge = b.center.x - b.halfWidth;
       if (leftEdge > rightEdge || neighbors >= SEPARATION_OPTS.maxNeighbors) break;
       neighbors += 1;
-      if (isNested(a.path, b.path)) continue;
       const dx = b.center.x - a.center.x;
       const dy = b.center.y - a.center.y;
       const overlapX = a.halfWidth + b.halfWidth + SEPARATION_OPTS.gap - Math.abs(dx);
@@ -94,12 +107,12 @@ export function buildFolderShifts(
       if (overlapX <= 0 || overlapY <= 0) continue;
       if (overlapX < overlapY) {
         const direction = dx === 0 ? (a.path.localeCompare(b.path) < 0 ? 1 : -1) : Math.sign(dx);
-        const force = overlapX * strength * 0.5;
+        const force = overlapX * strength * frame * 0.5;
         add(a, -direction * force, 0);
         add(b, direction * force, 0);
       } else {
         const direction = dy === 0 ? (a.path.localeCompare(b.path) < 0 ? 1 : -1) : Math.sign(dy);
-        const force = overlapY * strength * 0.5;
+        const force = overlapY * strength * frame * 0.5;
         add(a, 0, -direction * force);
         add(b, 0, direction * force);
       }
@@ -107,9 +120,61 @@ export function buildFolderShifts(
   }
 
   const result = new Map<string, Point>();
+  const max = SEPARATION_OPTS.maxShift * frame;
   for (const box of boxes) {
-    const shift = clampShift(shifts.get(box.path) ?? { x: 0, y: 0 });
-    result.set(box.path, shift);
+    result.set(box.path, clampShift(shifts.get(box.path) ?? { x: 0, y: 0 }, max));
   }
   return result;
+}
+
+export function buildCohesionShifts(
+  points: readonly FolderPoint[],
+  strength: number,
+  scale = 1
+): Map<string, Point> {
+  const frame = frameScale(scale);
+  if (!Number.isFinite(strength) || strength <= 0 || frame === 0) return new Map();
+  const groups = new Map<string, CohesionGroup>();
+  for (const point of points) {
+    const path = normalizeFolder(point.folder);
+    const group = groups.get(path) ?? { anchor: null, nodes: [] };
+    if (point.isAnchor) group.anchor = point;
+    else group.nodes.push(point);
+    groups.set(path, group);
+  }
+
+  const shifts = new Map<string, Point>();
+  const max = COHESION_OPTS.maxShift * frame;
+  const pull = strength * COHESION_OPTS.pullFactor * frame;
+  for (const group of groups.values()) {
+    const anchor = group.anchor;
+    if (anchor === null || group.nodes.length === 0) continue;
+    const radius = COHESION_OPTS.baseRadius
+      + Math.sqrt(group.nodes.length) * COHESION_OPTS.nodeSpacing;
+    let anchorX = 0;
+    let anchorY = 0;
+    for (const node of group.nodes) {
+      if (node.isFixed) continue;
+      const dx = anchor.x - node.x;
+      const dy = anchor.y - node.y;
+      const distance = Math.hypot(dx, dy);
+      const allowed = radius * (node.isExternal ? COHESION_OPTS.externalRadius : 1);
+      const excess = distance - allowed;
+      if (excess <= 0 || distance === 0) continue;
+      const linkFactor = node.isExternal ? COHESION_OPTS.externalStrength : 1;
+      const move = Math.min(max, excess * pull * linkFactor);
+      const shift = { x: dx / distance * move, y: dy / distance * move };
+      shifts.set(node.id, shift);
+      anchorX -= shift.x / group.nodes.length;
+      anchorY -= shift.y / group.nodes.length;
+    }
+    if (!anchor.isFixed) {
+      const shift = clampShift(
+        { x: anchorX, y: anchorY },
+        COHESION_OPTS.maxAnchorShift * frame
+      );
+      if (shift.x !== 0 || shift.y !== 0) shifts.set(anchor.id, shift);
+    }
+  }
+  return shifts;
 }

@@ -23,7 +23,7 @@ export const BASE_NODE_SIZE = 6;
 export const BASE_EDGE_SIZE = 1.6;
 export const FOLDER_EDGE_WEIGHT = 0.18;
 export const UNLINKED_FOLDER_FACTOR = 4;
-export const PARENT_EDGE_FACTOR = 0.5;
+export const PARENT_EDGE_FACTOR = 2;
 export const CONTOUR_POINTS = 6;
 export const CONTOUR_CAPSULE_POINTS = 32;
 export const CONTOUR_SIMPLE_NODE_LIMIT = 3;
@@ -86,6 +86,17 @@ export const SEPARATION_OPTS = {
   gap: 6,
   maxShift: 0.35,
   maxNeighbors: 32
+} as const;
+
+export const COHESION_OPTS = {
+  baseRadius: 5,
+  nodeSpacing: 2.4,
+  pullFactor: 0.15,
+  externalRadius: 1.8,
+  externalStrength: 0.12,
+  maxShift: 0.45,
+  maxAnchorShift: 0.2,
+  maxFrameScale: 2
 } as const;
 
 export const CONTOUR_STYLE = {

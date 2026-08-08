@@ -185,7 +185,7 @@ export class ContourGraphSettingTab extends PluginSettingTab {
 
     this.addFolderSlider(
       "Folder attraction",
-      "Pull notes toward their direct folder anchor.",
+      "Compact notes around their direct folder anchor; external links can still pull them outward.",
       "clusterStrength",
       0,
       1,
@@ -193,7 +193,7 @@ export class ContourGraphSettingTab extends PluginSettingTab {
     );
     this.addFolderSlider(
       "Folder separation",
-      "Push overlapping, unrelated direct-folder groups apart.",
+      "Push overlapping, unrelated top-level folder families apart.",
       "separationStrength",
       0,
       0.5,
