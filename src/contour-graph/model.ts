@@ -14,6 +14,7 @@ import {
   folderColor,
   folderDepth,
   initialPoint,
+  isFolderExcluded,
   parentFolder,
   sortFolders
 } from "./folders";
@@ -229,7 +230,10 @@ function addFolders(
 ): FolderGroup[] {
   const members = new Map<string, Set<string>>();
   const anchors = new Set<string>();
-  const files = [...nodes.values()].filter((node) => node.path !== null && node.folder !== null);
+  const files = [...nodes.values()].filter((node) => {
+    return node.path !== null && node.folder !== null
+      && !isFolderExcluded(node.folder, settings.folder.excluded);
+  });
   const isDark = usesDarkTheme();
   const weight = settings.graph.linkStrength * settings.folder.clusterStrength;
 

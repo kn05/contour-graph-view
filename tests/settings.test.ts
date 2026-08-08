@@ -26,6 +26,16 @@ describe("plugin settings", () => {
     expect(migrateSettings({ schemaVersion: -1 }).ok).toBe(false);
   });
 
+  it("migrates schema one with an empty excluded-folder list", () => {
+    const migrated = migrateSettings({ schemaVersion: 1, folder: { contourPadding: 30 } });
+    expect(migrated.ok).toBe(true);
+    if (!migrated.ok) return;
+    expect(migrated.value).toEqual(expect.objectContaining({
+      schemaVersion: SCHEMA_VERSION,
+      folder: { contourPadding: 30, excluded: [] }
+    }));
+  });
+
   it("restores defaults for invalid numbers and keeps valid saved groups", () => {
     const settings = parseSettings({
       schemaVersion: 1,
@@ -38,7 +48,11 @@ describe("plugin settings", () => {
           { query: "bad", color: "red" }
         ]
       },
-      folder: { maxDepth: 9, contourPadding: -10 },
+      folder: {
+        maxDepth: 9,
+        contourPadding: -10,
+        excluded: ["00_Meta", "/00_Meta/Sources", "/", 42]
+      },
       positions: {
         "Good.md": { x: 1, y: 2 },
         "Bad.md": { x: Number.NaN, y: 2, fixed: true }
@@ -50,6 +64,7 @@ describe("plugin settings", () => {
     expect(settings.graph.colorGroups).toEqual([{ query: "tag:work", color: "#123456" }]);
     expect(settings.folder.maxDepth).toBeNull();
     expect(settings.folder.contourPadding).toBe(DEFAULT_SETTINGS.folder.contourPadding);
+    expect(settings.folder.excluded).toEqual(["/00_Meta"]);
     expect(settings.positions).toEqual({ "Good.md": { x: 1, y: 2, fixed: false } });
   });
 

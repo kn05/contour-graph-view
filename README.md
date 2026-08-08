@@ -20,6 +20,10 @@ load, supported values from the core Global Graph settings become this
 plugin's defaults. Later changes are stored independently. Use **Import from
 Graph settings** in the plugin settings to import again.
 
+Use **Excluded folders** under **Folders and contours** to keep selected folder
+notes and their regular links visible while removing folder attraction and
+contours for the selected folder subtree.
+
 ## Development
 
 ```bash

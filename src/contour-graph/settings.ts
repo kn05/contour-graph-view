@@ -1,6 +1,12 @@
 import { normalizePath, type App } from "obsidian";
-import { DEFAULT_SETTINGS, MAX_POSITIONS, SCHEMA_VERSION } from "./constants";
-import { normalizeFolder } from "./folders";
+import {
+  DEFAULT_SETTINGS,
+  MAX_EXCLUDED_FOLDERS,
+  MAX_FOLDER_PATH_LENGTH,
+  MAX_POSITIONS,
+  SCHEMA_VERSION
+} from "./constants";
+import { compactFolders, normalizeFolder } from "./folders";
 import { parseQuery } from "./query";
 import type {
   ColorGroup,
@@ -102,6 +108,18 @@ function parseColors(value: unknown): Record<string, string> {
   return colors;
 }
 
+function parseExcluded(value: unknown, fallback: readonly string[]): string[] {
+  if (!Array.isArray(value)) return [...fallback];
+  const folders: string[] = [];
+  for (const entry of value.slice(0, MAX_EXCLUDED_FOLDERS)) {
+    if (typeof entry !== "string") continue;
+    const path = entry.trim();
+    if (path.length === 0 || path.length > MAX_FOLDER_PATH_LENGTH || path.includes("\0")) continue;
+    folders.push(path);
+  }
+  return compactFolders(folders);
+}
+
 function parseFolder(value: unknown, fallback: FolderOpts): FolderOpts {
   if (!isMap(value)) return structuredClone(fallback);
   const rawDepth = value.maxDepth;
@@ -114,6 +132,7 @@ function parseFolder(value: unknown, fallback: FolderOpts): FolderOpts {
     contourOpacity: readNum(value, "contourOpacity", fallback.contourOpacity, 0, 0.5),
     contourPadding: readNum(value, "contourPadding", fallback.contourPadding, 4, 120),
     minNodes: Math.round(readNum(value, "minNodes", fallback.minNodes, 2, 100)),
+    excluded: parseExcluded(value.excluded, fallback.excluded),
     colors: parseColors(value.colors)
   };
 }
@@ -137,8 +156,18 @@ function migrateV0(value: RawMap): RawMap {
   return { ...value, schemaVersion: 1 };
 }
 
+function migrateV1(value: RawMap): RawMap {
+  const folder = isMap(value.folder) ? value.folder : {};
+  return {
+    ...value,
+    folder: { ...folder, excluded: Array.isArray(folder.excluded) ? folder.excluded : [] },
+    schemaVersion: 2
+  };
+}
+
 const MIGRATIONS: Readonly<Record<number, (value: RawMap) => RawMap>> = {
-  0: migrateV0
+  0: migrateV0,
+  1: migrateV1
 };
 
 export function migrateSettings(value: unknown): Result<RawMap> {

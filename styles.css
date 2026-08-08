@@ -75,3 +75,36 @@
   min-height: 100px;
   font-family: var(--font-monospace);
 }
+
+.contour-graph-folder-modal {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.contour-graph-folder-search {
+  width: 100%;
+  margin-bottom: var(--size-4-3);
+}
+
+.contour-graph-folder-picker {
+  max-height: min(55vh, 520px);
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+}
+
+.contour-graph-folder-option {
+  display: flex;
+  gap: var(--size-4-2);
+  align-items: center;
+  padding: var(--size-2-3) var(--size-4-3);
+  border-bottom: 1px solid var(--background-modifier-border-hover);
+  cursor: pointer;
+}
+
+.contour-graph-folder-option:last-child {
+  border-bottom: 0;
+}
+
+.contour-graph-folder-option:hover {
+  background: var(--background-modifier-hover);
+}

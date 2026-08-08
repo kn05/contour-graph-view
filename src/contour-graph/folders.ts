@@ -28,6 +28,26 @@ export function folderDepth(path: string): number {
   return folder === ROOT_FOLDER ? 0 : folder.slice(1).split("/").length;
 }
 
+export function isFolderExcluded(path: string, excluded: readonly string[]): boolean {
+  const folder = normalizeFolder(path);
+  return excluded.some((entry) => {
+    const base = normalizeFolder(entry);
+    return base !== ROOT_FOLDER && (folder === base || folder.startsWith(`${base}/`));
+  });
+}
+
+export function compactFolders(paths: readonly string[]): string[] {
+  const folders = [...new Set(paths.map(normalizeFolder))]
+    .filter((folder) => folder !== ROOT_FOLDER)
+    .sort((left, right) => {
+      const gap = folderDepth(left) - folderDepth(right);
+      return gap === 0 ? left.localeCompare(right) : gap;
+    });
+  return folders.filter((folder, index) => {
+    return !isFolderExcluded(folder, folders.slice(0, index));
+  });
+}
+
 export function folderChain(path: string, maxDepth: number | null): string[] {
   const folder = normalizeFolder(path);
   if (folder === ROOT_FOLDER) return [];

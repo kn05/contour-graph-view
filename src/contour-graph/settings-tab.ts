@@ -1,4 +1,5 @@
 import { Notice, PluginSettingTab, Setting, type App, type Plugin } from "obsidian";
+import { FolderPicker } from "./folder-picker";
 import { normalizeFolder } from "./folders";
 import { parseQuery } from "./query";
 import type { ColorGroup, ContourGraphSettings, FolderOpts, GraphOpts, Result } from "./types";
@@ -56,6 +57,13 @@ function colorText(colors: Record<string, string>): string {
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([path, color]) => `${path} = ${color}`)
     .join("\n");
+}
+
+function excludedText(folders: readonly string[]): string {
+  if (folders.length === 0) return "No folders are excluded from attraction and contours.";
+  const shown = folders.slice(0, 3).join(", ");
+  const extra = folders.length > 3 ? ` and ${folders.length - 3} more` : "";
+  return `Excluded: ${shown}${extra}. Notes and regular links remain visible.`;
 }
 
 export class ContourGraphSettingTab extends PluginSettingTab {
@@ -160,6 +168,20 @@ export class ContourGraphSettingTab extends PluginSettingTab {
         .addOptions({ all: "All", "1": "1", "2": "2", "3": "3", "4": "4" })
         .setValue(this.host.getSettings().folder.maxDepth?.toString() ?? "all")
         .onChange((value) => this.updateFolder({ maxDepth: value === "all" ? null : Number(value) })));
+
+    const excluded = this.host.getSettings().folder.excluded;
+    new Setting(this.containerEl)
+      .setName("Excluded folders")
+      .setDesc(excludedText(excluded))
+      .addButton((button) => button
+        .setButtonText("Choose")
+        .onClick(() => {
+          new FolderPicker(this.app, excluded, (folders) => {
+            this.updateFolder({ excluded: folders });
+            new Notice("Contour Graph View: Excluded folders updated.");
+            this.renderSettings();
+          }).open();
+        }));
 
     this.addFolderSlider("Folder attraction", "Gently gather files by their folder.", "clusterStrength", 0, 1, 0.01);
     this.addFolderSlider("Contour opacity", "Set the resting contour opacity.", "contourOpacity", 0, 0.3, 0.01);

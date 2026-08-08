@@ -38,6 +38,7 @@ export interface FolderOpts {
   contourOpacity: number;
   contourPadding: number;
   minNodes: number;
+  excluded: string[];
   colors: Record<string, string>;
 }
 

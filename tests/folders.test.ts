@@ -6,6 +6,8 @@ import {
   folderColor,
   folderDepth,
   initialPoint,
+  isFolderExcluded,
+  compactFolders,
   normalizeFolder,
   parentFolder
 } from "../src/contour-graph/folders";
@@ -25,6 +27,14 @@ describe("folder paths", () => {
     expect(folderChain("/A/B/C", null)).toEqual(["/A", "/A/B", "/A/B/C"]);
     expect(folderChain("/A/B/C", 2)).toEqual(["/A", "/A/B"]);
     expect(folderChain("/", null)).toEqual([]);
+  });
+
+  it("excludes selected folder subtrees and removes redundant descendants", () => {
+    const excluded = compactFolders(["/Meta/Sources", "Meta", "/Work", "/Work/Archive"]);
+    expect(excluded).toEqual(["/Meta", "/Work"]);
+    expect(isFolderExcluded("/Meta/Sources/Books", excluded)).toBe(true);
+    expect(isFolderExcluded("/Metadata", excluded)).toBe(false);
+    expect(isFolderExcluded("/Other/Meta", excluded)).toBe(false);
   });
 
   it("uses the full folder path for identity and color", () => {

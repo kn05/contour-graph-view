@@ -115,6 +115,29 @@ describe("vault graph model", () => {
     expect(firstNodes.get("New.md")?.y).toBe(secondNodes.get("New.md")?.y);
   });
 
+  it("keeps excluded-folder notes and links but omits their folder force and contour", () => {
+    const app = makeApp({
+      files: [makeFile("00_Meta/One.md"), makeFile("00_Meta/Sources/Two.md"), makeFile("Keep/Three.md")],
+      resolved: { "00_Meta/One.md": { "Keep/Three.md": 1 } }
+    });
+    const settings = makeSettings();
+    settings.folder.excluded = ["/00_Meta"];
+    const result = buildGraph(app, settings);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.nodes.some((node) => node.id === "00_Meta/One.md")).toBe(true);
+    expect(result.value.edges).toContainEqual(expect.objectContaining({
+      source: "00_Meta/One.md",
+      target: "Keep/Three.md",
+      kind: "link"
+    }));
+    expect(result.value.nodes.some((node) => node.id === "folder:/00_Meta")).toBe(false);
+    expect(result.value.edges.some((edge) => {
+      return edge.kind === "folder" && edge.source.startsWith("00_Meta/");
+    })).toBe(false);
+    expect(result.value.folders.some((folder) => folder.path.startsWith("/00_Meta"))).toBe(false);
+  });
+
   it("moves and deletes file or folder position subtrees", () => {
     const positions: Record<string, SavedPoint> = {
       "A/One.md": { x: 1, y: 2, fixed: false },

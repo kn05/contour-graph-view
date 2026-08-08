@@ -2,7 +2,7 @@ import type { ContourGraphSettings } from "./types";
 
 export const VIEW_TYPE = "contour-graph-view";
 export const VIEW_NAME = "Contour Graph View";
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const ROOT_FOLDER = "/";
 export const FOLDER_PREFIX = "folder:";
 export const TAG_PREFIX = "tag:";
@@ -17,6 +17,8 @@ export const MAX_CONTOUR_DELAY = 180;
 export const MAX_POSITIONS = 12_000;
 export const MAX_QUERY_LENGTH = 4_096;
 export const MAX_QUERY_TOKENS = 512;
+export const MAX_EXCLUDED_FOLDERS = 512;
+export const MAX_FOLDER_PATH_LENGTH = 1_024;
 export const BASE_NODE_SIZE = 6;
 export const BASE_EDGE_SIZE = 1.6;
 export const FOLDER_EDGE_WEIGHT = 0.18;
@@ -110,6 +112,7 @@ export const DEFAULT_SETTINGS: ContourGraphSettings = {
     contourOpacity: 0.09,
     contourPadding: 24,
     minNodes: 2,
+    excluded: [],
     colors: {}
   },
   positions: {},
