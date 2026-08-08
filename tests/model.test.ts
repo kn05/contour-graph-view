@@ -1,10 +1,6 @@
 import type { App, TFile } from "obsidian";
 import { describe, expect, it } from "vitest";
-import {
-  DEFAULT_SETTINGS,
-  FOLDER_EDGE_WEIGHT,
-  UNLINKED_FOLDER_FACTOR
-} from "../src/contour-graph/constants";
+import { DEFAULT_SETTINGS } from "../src/contour-graph/constants";
 import { buildGraph, dropPositions, movePosition } from "../src/contour-graph/model";
 import type { ContourGraphSettings, SavedPoint } from "../src/contour-graph/types";
 
@@ -69,15 +65,9 @@ describe("vault graph model", () => {
     expect(folders.get("/A")).toContain("A/B/C/Deep.md");
     expect(folders.get("/A/B")).toContain("A/B/C/Deep.md");
     expect(folders.has("/A/B/C")).toBe(false);
+    expect(result.value.nodes.some((node) => node.id === "folder:/")).toBe(true);
     expect(result.value.nodes.some((node) => node.id === "folder:/A/B/C")).toBe(true);
-    expect(result.value.edges).toContainEqual(expect.objectContaining({
-      source: "A/B/C/Deep.md",
-      target: "folder:/A/B/C",
-      kind: "folder"
-    }));
-    expect(result.value.edges.some((edge) => {
-      return edge.kind === "folder" && edge.source === "folder:/A" && edge.target === "folder:/";
-    })).toBe(false);
+    expect(result.value.edges.some((edge) => edge.target.startsWith("folder:"))).toBe(false);
     expect(folders.has("/Left/Shared")).toBe(true);
     expect(folders.has("/Right/Shared")).toBe(true);
   });
@@ -139,13 +129,11 @@ describe("vault graph model", () => {
       kind: "link"
     }));
     expect(result.value.nodes.some((node) => node.id === "folder:/00_Meta")).toBe(false);
-    expect(result.value.edges.some((edge) => {
-      return edge.kind === "folder" && edge.source.startsWith("00_Meta/");
-    })).toBe(false);
+    expect(result.value.nodes.find((node) => node.id === "00_Meta/One.md")?.folder).toBeNull();
     expect(result.value.folders.some((folder) => folder.path.startsWith("/00_Meta"))).toBe(false);
   });
 
-  it("keeps unlinked notes closer to their folder anchor", () => {
+  it("keeps folder membership virtual instead of adding physical graph edges", () => {
     const app = makeApp({
       files: [
         makeFile("Folder/Linked.md"),
@@ -157,11 +145,13 @@ describe("vault graph model", () => {
     const result = buildGraph(app, makeSettings());
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const folderEdges = result.value.edges.filter((edge) => edge.kind === "folder");
-    const linked = folderEdges.find((edge) => edge.source === "Folder/Linked.md");
-    const unlinked = folderEdges.find((edge) => edge.source === "Folder/Unlinked.md");
-    expect(linked?.weight).toBeCloseTo(FOLDER_EDGE_WEIGHT);
-    expect(unlinked?.weight).toBeCloseTo(FOLDER_EDGE_WEIGHT * UNLINKED_FOLDER_FACTOR);
+    expect(result.value.nodes.some((node) => node.id === "folder:/Folder")).toBe(true);
+    expect(result.value.edges).toHaveLength(1);
+    expect(result.value.edges[0]).toEqual(expect.objectContaining({
+      source: "Folder/Linked.md",
+      target: "Folder/Target.md",
+      kind: "link"
+    }));
   });
 
   it("moves and deletes file or folder position subtrees", () => {

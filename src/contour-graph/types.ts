@@ -71,7 +71,7 @@ export interface GraphEdge {
   id: string;
   source: string;
   target: string;
-  kind: "link" | "tag" | "folder";
+  kind: "link" | "tag";
   weight: number;
   hidden: boolean;
 }

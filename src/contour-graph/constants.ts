@@ -21,9 +21,7 @@ export const MAX_EXCLUDED_FOLDERS = 512;
 export const MAX_FOLDER_PATH_LENGTH = 1_024;
 export const BASE_NODE_SIZE = 6;
 export const BASE_EDGE_SIZE = 1.6;
-export const FOLDER_EDGE_WEIGHT = 0.18;
-export const UNLINKED_FOLDER_FACTOR = 4;
-export const PARENT_EDGE_FACTOR = 2;
+export const DEFAULT_FOLDER_ATTRACTION = 0.18;
 export const CONTOUR_POINTS = 6;
 export const CONTOUR_CAPSULE_POINTS = 32;
 export const CONTOUR_SIMPLE_NODE_LIMIT = 3;
@@ -88,14 +86,12 @@ export const SEPARATION_OPTS = {
   maxNeighbors: 32
 } as const;
 
-export const COHESION_OPTS = {
-  baseRadius: 5,
-  nodeSpacing: 2.4,
+export const VIRTUAL_LINK_OPTS = {
   pullFactor: 0.15,
-  externalRadius: 1.8,
-  externalStrength: 0.12,
-  maxShift: 0.45,
+  parentFactor: 0.75,
+  maxNodeShift: 0.45,
   maxAnchorShift: 0.2,
+  maxParentShift: 0.3,
   maxFrameScale: 2
 } as const;
 
@@ -132,7 +128,7 @@ export const DEFAULT_SETTINGS: ContourGraphSettings = {
   },
   folder: {
     maxDepth: null,
-    clusterStrength: FOLDER_EDGE_WEIGHT,
+    clusterStrength: DEFAULT_FOLDER_ATTRACTION,
     separationStrength: 0.12,
     contourOpacity: 0.09,
     contourPadding: 24,

@@ -86,7 +86,6 @@ function makeFolderGraph(): DirectedGraph<NodeAttrs, EdgeAttrs> {
     folder: "/A",
     kind: "file"
   });
-  graph.addDirectedEdge("A/Free.md", "folder:/A", { weight: 0.72, kind: "folder" });
   return graph;
 }
 
@@ -185,6 +184,7 @@ describe("layout worker lifecycle", () => {
 
   it("compacts a distant unlinked note during the visible motion frame", () => {
     const graph = makeFolderGraph();
+    expect(graph.size).toBe(0);
     const runner = new LayoutRunner(graph, { save: () => undefined, showError: () => undefined });
     runner.start(DEFAULT_SETTINGS);
     const frame = nextFrame;

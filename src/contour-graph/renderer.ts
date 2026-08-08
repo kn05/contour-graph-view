@@ -54,7 +54,7 @@ interface NodeAttrs extends Attributes {
 }
 
 interface EdgeAttrs extends Attributes {
-  kind: "link" | "tag" | "folder";
+  kind: "link" | "tag";
   weight: number;
   size: number;
   color: string;

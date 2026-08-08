@@ -1,12 +1,9 @@
 import { getAllTags, type App, type CachedMetadata, type TFile } from "obsidian";
 import {
   BASE_NODE_SIZE,
-  FOLDER_EDGE_WEIGHT,
   NODE_COLORS,
-  PARENT_EDGE_FACTOR,
   ROOT_FOLDER,
   TAG_PREFIX,
-  UNLINKED_FOLDER_FACTOR,
   UNRESOLVED_PREFIX
 } from "./constants";
 import {
@@ -17,7 +14,6 @@ import {
   folderDepth,
   initialPoint,
   isFolderExcluded,
-  parentFolder,
   sortFolders
 } from "./folders";
 import { matchQuery, parseQuery } from "./query";
@@ -212,7 +208,6 @@ function addTagNodes(
 function dropOrphans(nodes: Map<string, GraphNode>, edges: Map<string, GraphEdge>): void {
   const linked = new Set<string>();
   for (const edge of edges.values()) {
-    if (edge.kind === "folder") continue;
     linked.add(edge.source);
     linked.add(edge.target);
   }
@@ -227,7 +222,6 @@ function dropOrphans(nodes: Map<string, GraphNode>, edges: Map<string, GraphEdge
 
 function addFolders(
   nodes: Map<string, GraphNode>,
-  edges: Map<string, GraphEdge>,
   settings: ContourGraphSettings
 ): FolderGroup[] {
   const members = new Map<string, Set<string>>();
@@ -237,14 +231,13 @@ function addFolders(
       && !isFolderExcluded(node.folder, settings.folder.excluded);
   });
   const isDark = usesDarkTheme();
-  const weight = settings.graph.linkStrength * settings.folder.clusterStrength;
-  const parentWeight = settings.graph.linkStrength * FOLDER_EDGE_WEIGHT * PARENT_EDGE_FACTOR;
-  const linked = new Set<string>();
-  for (const edge of edges.values()) {
-    if (edge.kind !== "link") continue;
-    linked.add(edge.source);
-    linked.add(edge.target);
+  for (const node of nodes.values()) {
+    const isFile = node.kind === "file" || node.kind === "attachment";
+    if (isFile && node.folder !== null && isFolderExcluded(node.folder, settings.folder.excluded)) {
+      node.folder = null;
+    }
   }
+  if (files.length > 0) anchors.add(ROOT_FOLDER);
 
   for (const file of files) {
     const chain = folderChain(file.folder ?? ROOT_FOLDER, null);
@@ -259,30 +252,10 @@ function addFolders(
 
     const direct = chain.at(-1) ?? ROOT_FOLDER;
     anchors.add(direct);
-    const directId = anchorId(direct);
-    ensureFolderNode(nodes, direct, settings, isDark);
-    addEdge(edges, {
-      source: file.id,
-      target: directId,
-      kind: "folder",
-      weight: linked.has(file.id) ? weight : weight * UNLINKED_FOLDER_FACTOR,
-      hidden: true
-    });
   }
 
   for (const folder of anchors) {
     ensureFolderNode(nodes, folder, settings, isDark);
-    if (folder === ROOT_FOLDER) continue;
-    const parent = parentFolder(folder);
-    if (parent === ROOT_FOLDER) continue;
-    ensureFolderNode(nodes, parent, settings, isDark);
-    addEdge(edges, {
-      source: anchorId(folder),
-      target: anchorId(parent),
-      kind: "folder",
-      weight: parentWeight,
-      hidden: true
-    });
   }
 
   const groups = [...members].map(([path, ids]) => ({
@@ -359,7 +332,7 @@ export function buildGraph(app: App, settings: ContourGraphSettings): Result<Gra
   addFileLinks(app, nodes, edges, settings);
   addTagNodes(nodes, edges, settings);
   if (!settings.graph.showOrphans) dropOrphans(nodes, edges);
-  const folders = addFolders(nodes, edges, settings);
+  const folders = addFolders(nodes, settings);
 
   return {
     ok: true,

@@ -185,7 +185,7 @@ export class ContourGraphSettingTab extends PluginSettingTab {
 
     this.addFolderSlider(
       "Folder attraction",
-      "Compact notes around their direct folder anchor; external links can still pull them outward.",
+      "Add virtual springs from notes to direct folders and from folders to their parents.",
       "clusterStrength",
       0,
       1,

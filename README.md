@@ -24,8 +24,9 @@ Use **Excluded folders** under **Folders and contours** to keep selected folder
 notes and their regular links visible while removing folder attraction and
 contours for the selected folder subtree.
 
-**Folder attraction** compacts notes around each direct folder anchor. Notes
-with external links stay looser so the link structure can pull them outward.
+**Folder attraction** adds virtual springs from notes to their direct folder
+and from folders to their parents. These springs do not become graph edges or
+increase ForceAtlas2 repulsion, so regular links can pull against them naturally.
 **Folder separation** pushes unrelated top-level folder families apart without
 forcing sibling subfolders inside the same family away from one another.
 

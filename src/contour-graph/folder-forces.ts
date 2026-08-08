@@ -1,16 +1,15 @@
 import {
-  COHESION_OPTS,
   ROOT_FOLDER,
-  SEPARATION_OPTS
+  SEPARATION_OPTS,
+  VIRTUAL_LINK_OPTS
 } from "./constants";
-import { normalizeFolder, topFolder } from "./folders";
+import { normalizeFolder, parentFolder, topFolder } from "./folders";
 import type { Point } from "./types";
 
 export interface FolderPoint extends Point {
   id: string;
   folder: string;
   isAnchor: boolean;
-  isExternal: boolean;
   isFixed: boolean;
 }
 
@@ -21,7 +20,7 @@ interface FolderBox {
   halfHeight: number;
 }
 
-interface CohesionGroup {
+interface VirtualGroup {
   anchor: FolderPoint | null;
   nodes: FolderPoint[];
 }
@@ -35,7 +34,12 @@ function clampShift(point: Point, max: number): Point {
 
 function frameScale(scale: number): number {
   if (!Number.isFinite(scale) || scale <= 0) return 0;
-  return Math.min(COHESION_OPTS.maxFrameScale, scale);
+  return Math.min(VIRTUAL_LINK_OPTS.maxFrameScale, scale);
+}
+
+function addShift(shifts: Map<string, Point>, id: string, x: number, y: number): void {
+  const shift = shifts.get(id) ?? { x: 0, y: 0 };
+  shifts.set(id, { x: shift.x + x, y: shift.y + y });
 }
 
 function buildBoxes(points: readonly FolderPoint[]): FolderBox[] {
@@ -127,30 +131,33 @@ export function buildFolderShifts(
   return result;
 }
 
-export function buildCohesionShifts(
+export function buildVirtualLinkShifts(
   points: readonly FolderPoint[],
   strength: number,
   scale = 1
 ): Map<string, Point> {
   const frame = frameScale(scale);
   if (!Number.isFinite(strength) || strength <= 0 || frame === 0) return new Map();
-  const groups = new Map<string, CohesionGroup>();
+  const groups = new Map<string, VirtualGroup>();
+  const anchors = new Map<string, FolderPoint>();
   for (const point of points) {
     const path = normalizeFolder(point.folder);
     const group = groups.get(path) ?? { anchor: null, nodes: [] };
-    if (point.isAnchor) group.anchor = point;
-    else group.nodes.push(point);
+    if (point.isAnchor) {
+      group.anchor = point;
+      anchors.set(path, point);
+    } else {
+      group.nodes.push(point);
+    }
     groups.set(path, group);
   }
 
   const shifts = new Map<string, Point>();
-  const max = COHESION_OPTS.maxShift * frame;
-  const pull = strength * COHESION_OPTS.pullFactor * frame;
+  const max = VIRTUAL_LINK_OPTS.maxNodeShift * frame;
+  const pull = strength * VIRTUAL_LINK_OPTS.pullFactor * frame;
   for (const group of groups.values()) {
     const anchor = group.anchor;
     if (anchor === null || group.nodes.length === 0) continue;
-    const radius = COHESION_OPTS.baseRadius
-      + Math.sqrt(group.nodes.length) * COHESION_OPTS.nodeSpacing;
     let anchorX = 0;
     let anchorY = 0;
     for (const node of group.nodes) {
@@ -158,22 +165,45 @@ export function buildCohesionShifts(
       const dx = anchor.x - node.x;
       const dy = anchor.y - node.y;
       const distance = Math.hypot(dx, dy);
-      const allowed = radius * (node.isExternal ? COHESION_OPTS.externalRadius : 1);
-      const excess = distance - allowed;
-      if (excess <= 0 || distance === 0) continue;
-      const linkFactor = node.isExternal ? COHESION_OPTS.externalStrength : 1;
-      const move = Math.min(max, excess * pull * linkFactor);
+      if (distance === 0) continue;
+      const move = Math.min(max, distance * pull);
       const shift = { x: dx / distance * move, y: dy / distance * move };
-      shifts.set(node.id, shift);
+      addShift(shifts, node.id, shift.x, shift.y);
       anchorX -= shift.x / group.nodes.length;
       anchorY -= shift.y / group.nodes.length;
     }
     if (!anchor.isFixed) {
       const shift = clampShift(
         { x: anchorX, y: anchorY },
-        COHESION_OPTS.maxAnchorShift * frame
+        VIRTUAL_LINK_OPTS.maxAnchorShift * frame
       );
-      if (shift.x !== 0 || shift.y !== 0) shifts.set(anchor.id, shift);
+      if (shift.x !== 0 || shift.y !== 0) addShift(shifts, anchor.id, shift.x, shift.y);
+    }
+  }
+
+  const childCounts = new Map<string, number>();
+  for (const path of anchors.keys()) {
+    if (path === ROOT_FOLDER) continue;
+    const parent = parentFolder(path);
+    if (anchors.has(parent)) childCounts.set(parent, (childCounts.get(parent) ?? 0) + 1);
+  }
+  const parentPull = pull * VIRTUAL_LINK_OPTS.parentFactor;
+  const parentMax = VIRTUAL_LINK_OPTS.maxParentShift * frame;
+  for (const [path, child] of anchors) {
+    if (path === ROOT_FOLDER || child.isFixed) continue;
+    const parentPath = parentFolder(path);
+    const parent = anchors.get(parentPath);
+    if (parent === undefined) continue;
+    const dx = parent.x - child.x;
+    const dy = parent.y - child.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance === 0) continue;
+    const move = Math.min(parentMax, distance * parentPull);
+    const shift = { x: dx / distance * move, y: dy / distance * move };
+    addShift(shifts, child.id, shift.x, shift.y);
+    if (!parent.isFixed) {
+      const count = childCounts.get(parentPath) ?? 1;
+      addShift(shifts, parent.id, -shift.x / count, -shift.y / count);
     }
   }
   return shifts;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildCohesionShifts,
   buildFolderShifts,
+  buildVirtualLinkShifts,
   type FolderPoint
 } from "../src/contour-graph/folder-forces";
 
@@ -10,7 +10,7 @@ function point(
   folder: string,
   x: number,
   y: number,
-  opts: Partial<Pick<FolderPoint, "isAnchor" | "isExternal" | "isFixed">> = {}
+  opts: Partial<Pick<FolderPoint, "isAnchor" | "isFixed">> = {}
 ): FolderPoint {
   return {
     id,
@@ -18,7 +18,6 @@ function point(
     x,
     y,
     isAnchor: opts.isAnchor ?? false,
-    isExternal: opts.isExternal ?? false,
     isFixed: opts.isFixed ?? false
   };
 }
@@ -61,27 +60,34 @@ describe("folder forces", () => {
     expect(shifts.get("/B")).toEqual({ x: 0, y: 0 });
   });
 
-  it("pulls unlinked notes inward more strongly than external-link notes", () => {
-    const shifts = buildCohesionShifts([
+  it("pulls every member toward one virtual folder anchor", () => {
+    const shifts = buildVirtualLinkShifts([
       point("anchor", "/A", 0, 0, { isAnchor: true }),
-      point("free", "/A", 50, 0),
-      point("linked", "/A", -50, 0, { isExternal: true })
+      point("right", "/A", 20, 0),
+      point("left", "/A", -4, 0)
     ], 0.18);
-    const free = shifts.get("free");
-    const linked = shifts.get("linked");
-    expect(free?.x).toBeLessThan(0);
-    expect(linked?.x).toBeGreaterThan(0);
-    expect(Math.abs(free?.x ?? 0)).toBeGreaterThan(Math.abs(linked?.x ?? 0));
+    expect(shifts.get("right")?.x).toBeLessThan(0);
+    expect(shifts.get("left")?.x).toBeGreaterThan(0);
     expect(shifts.get("anchor")?.x).toBeGreaterThan(0);
   });
 
-  it("leaves close and fixed notes alone", () => {
-    const shifts = buildCohesionShifts([
+  it("connects folder anchors to their parent including the root", () => {
+    const shifts = buildVirtualLinkShifts([
+      point("root", "/", 0, 0, { isAnchor: true }),
+      point("parent", "/A", 30, 0, { isAnchor: true }),
+      point("child", "/A/B", 60, 0, { isAnchor: true })
+    ], 0.18);
+    expect(shifts.get("root")?.x).toBeGreaterThan(0);
+    expect(shifts.get("child")?.x).toBeLessThan(0);
+  });
+
+  it("leaves coincident and fixed notes alone", () => {
+    const shifts = buildVirtualLinkShifts([
       point("anchor", "/A", 0, 0, { isAnchor: true }),
-      point("close", "/A", 2, 0),
+      point("same", "/A", 0, 0),
       point("fixed", "/A", 100, 0, { isFixed: true })
     ], 0.18);
-    expect(shifts.has("close")).toBe(false);
+    expect(shifts.has("same")).toBe(false);
     expect(shifts.has("fixed")).toBe(false);
     expect(shifts.has("anchor")).toBe(false);
   });
@@ -91,8 +97,8 @@ describe("folder forces", () => {
       point("anchor", "/A", 0, 0, { isAnchor: true }),
       point("node", "/A", 20, 0)
     ];
-    const half = buildCohesionShifts(points, 0.18, 0.5).get("node");
-    const full = buildCohesionShifts(points, 0.18, 1).get("node");
+    const half = buildVirtualLinkShifts(points, 0.18, 0.5).get("node");
+    const full = buildVirtualLinkShifts(points, 0.18, 1).get("node");
     expect(Math.abs(half?.x ?? 0)).toBeLessThan(Math.abs(full?.x ?? 0));
   });
 
