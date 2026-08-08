@@ -280,9 +280,9 @@ function addFolders(
     });
   }
 
-  const regions = [...members].map(([path, ids]) => ({
+  const regions = [...anchors].map((path) => ({
     path,
-    nodes: [...ids],
+    nodes: [...(members.get(path) ?? [])],
     color: folderColor(path, settings.folder.colors, isDark)
   }));
   return sortRegions(regions);

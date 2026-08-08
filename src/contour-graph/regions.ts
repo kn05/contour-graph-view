@@ -1,4 +1,4 @@
-import { voronoiMapSimulation } from "d3-voronoi-map";
+import { Delaunay } from "d3-delaunay";
 import { REGION_OPTS } from "./constants";
 import { hashText } from "./folders";
 import type { Point } from "./types";
@@ -9,26 +9,35 @@ export interface RegionFrame {
 }
 
 export interface RegionSeed {
+  id: string;
   path: string;
   position: Point;
-  weight: number;
 }
 
 export interface RegionCell {
+  id: string;
   path: string;
   points: Point[];
   center: Point;
 }
 
-type Pair = [number, number];
+export interface RegionBoundary {
+  start: Point;
+  end: Point;
+  paths: string[];
+}
 
-function seededRandom(seed: number): () => number {
-  let state = seed || 1;
-  return () => {
-    state = Math.imul(state ^ state >>> 15, 1 | state);
-    state ^= state + Math.imul(state ^ state >>> 7, 61 | state);
-    return ((state ^ state >>> 14) >>> 0) / 4_294_967_296;
-  };
+export interface RegionPartition {
+  cells: RegionCell[];
+  boundaries: RegionBoundary[];
+  pathAt: (point: Point) => string | null;
+}
+
+interface BoundaryEntry {
+  start: Point;
+  end: Point;
+  owners: number;
+  paths: Set<string>;
 }
 
 function finitePoint(point: Point): boolean {
@@ -68,17 +77,6 @@ export function circlePolygon(frame: RegionFrame): Point[] {
   return points;
 }
 
-export function polygonCenter(points: readonly Point[]): Point {
-  if (points.length === 0) return { x: 0, y: 0 };
-  let x = 0;
-  let y = 0;
-  for (const point of points) {
-    x += point.x;
-    y += point.y;
-  }
-  return { x: x / points.length, y: y / points.length };
-}
-
 export function isInside(point: Point, polygon: readonly Point[]): boolean {
   let inside = false;
   for (let index = 0, prev = polygon.length - 1; index < polygon.length; prev = index, index += 1) {
@@ -107,8 +105,8 @@ export function buildRegionPath(points: readonly Point[]): Path2D {
 }
 
 function distinctSeeds(seeds: readonly RegionSeed[]): RegionSeed[] {
-  return [...seeds].sort((left, right) => left.path.localeCompare(right.path)).map((seed) => {
-    const angle = hashText(seed.path) / 0xffffffff * Math.PI * 2;
+  return [...seeds].sort((left, right) => left.id.localeCompare(right.id)).map((seed) => {
+    const angle = hashText(seed.id) / 0xffffffff * Math.PI * 2;
     return {
       ...seed,
       position: {
@@ -140,62 +138,113 @@ function clipHalfPlane(polygon: readonly Point[], a: number, b: number, c: numbe
   return result;
 }
 
-function fallbackCells(seeds: readonly RegionSeed[], clip: readonly Point[]): RegionCell[] {
-  const cells: RegionCell[] = [];
-  for (const seed of seeds) {
-    let polygon = [...clip];
-    for (const other of seeds) {
-      if (other.path === seed.path) continue;
-      const a = 2 * (other.position.x - seed.position.x);
-      const b = 2 * (other.position.y - seed.position.y);
-      const c = other.position.x ** 2 + other.position.y ** 2
-        - seed.position.x ** 2 - seed.position.y ** 2;
-      polygon = clipHalfPlane(polygon, a, b, c);
-      if (polygon.length < 3) break;
-    }
-    if (polygon.length >= 3) {
-      cells.push({ path: seed.path, points: polygon, center: polygonCenter(polygon) });
-    }
+function clipToCircle(polygon: readonly Point[], circle: readonly Point[]): Point[] {
+  let result = [...polygon];
+  for (let index = 0; index < circle.length; index += 1) {
+    const start = circle[index];
+    const end = circle[(index + 1) % circle.length];
+    if (start === undefined || end === undefined) continue;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    result = clipHalfPlane(result, dy, -dx, dy * start.x - dx * start.y);
+    if (result.length < 3) return [];
   }
-  return cells;
+  return result;
 }
 
-export function buildRegionCells(seeds: readonly RegionSeed[], frame: RegionFrame): RegionCell[] {
-  const safeSeeds = distinctSeeds(seeds.filter((seed) => finitePoint(seed.position) && seed.weight > 0));
-  const clip = circlePolygon(frame);
-  if (safeSeeds.length === 0) return [];
+function coordinateKey(value: number): number {
+  return Math.round(value * REGION_OPTS.edgePrecision);
+}
+
+function pointKey(point: Point): string {
+  return `${coordinateKey(point.x)},${coordinateKey(point.y)}`;
+}
+
+function edgeKey(start: Point, end: Point): string {
+  const left = pointKey(start);
+  const right = pointKey(end);
+  return left < right ? `${left}|${right}` : `${right}|${left}`;
+}
+
+export function regionBoundaries(cells: readonly RegionCell[]): RegionBoundary[] {
+  const entries = new Map<string, BoundaryEntry>();
+  for (const cell of cells) {
+    for (let index = 0; index < cell.points.length; index += 1) {
+      const start = cell.points[index];
+      const end = cell.points[(index + 1) % cell.points.length];
+      if (start === undefined || end === undefined) continue;
+      const key = edgeKey(start, end);
+      const entry = entries.get(key);
+      if (entry === undefined) {
+        entries.set(key, { start, end, owners: 1, paths: new Set([cell.path]) });
+      } else {
+        entry.owners += 1;
+        entry.paths.add(cell.path);
+      }
+    }
+  }
+  return [...entries.values()].flatMap((entry): RegionBoundary[] => {
+    if (entry.owners > 1 && entry.paths.size === 1) return [];
+    return [{ start: entry.start, end: entry.end, paths: [...entry.paths] }];
+  });
+}
+
+function openPolygon(points: readonly [number, number][]): Point[] {
+  const converted = points.map((point) => ({ x: point[0], y: point[1] }));
+  const first = converted[0];
+  const last = converted.at(-1);
+  if (first !== undefined && last !== undefined
+    && Math.abs(first.x - last.x) < 1e-7 && Math.abs(first.y - last.y) < 1e-7) {
+    converted.pop();
+  }
+  return converted;
+}
+
+export function buildRegionPartition(
+  seeds: readonly RegionSeed[],
+  frame: RegionFrame
+): RegionPartition {
+  const safeSeeds = distinctSeeds(seeds.filter((seed) => finitePoint(seed.position)));
+  const circle = circlePolygon(frame);
+  if (safeSeeds.length === 0) return { cells: [], boundaries: [], pathAt: () => null };
   if (safeSeeds.length === 1) {
     const seed = safeSeeds[0];
-    return seed === undefined ? [] : [{ path: seed.path, points: clip, center: frame.center }];
+    if (seed === undefined) return { cells: [], boundaries: [], pathAt: () => null };
+    const cell = { id: seed.id, path: seed.path, points: circle, center: seed.position };
+    return {
+      cells: [cell],
+      boundaries: regionBoundaries([cell]),
+      pathAt: (point) => isInside(point, circle) ? seed.path : null
+    };
   }
 
-  const pairs = clip.map((point): Pair => [point.x, point.y]);
-  const seedHash = hashText(safeSeeds.map((seed) => seed.path).join("\u0000"));
-  try {
-    const simulation = voronoiMapSimulation(safeSeeds)
-      .weight((seed) => seed.weight)
-      .clip(pairs)
-      .initialPosition((seed): Pair => [seed.position.x, seed.position.y])
-      .prng(seededRandom(seedHash))
-      .convergenceRatio(REGION_OPTS.convergenceRatio)
-      .maxIterationCount(REGION_OPTS.maxIterations)
-      .minWeightRatio(REGION_OPTS.minWeightRatio)
-      .stop();
-    let state = simulation.state();
-    while (!state.ended) {
-      simulation.tick();
-      state = simulation.state();
-    }
-    const cells: RegionCell[] = [];
-    for (const polygon of state.polygons) {
-      if (polygon === undefined || polygon.length < 3) continue;
-      const seed = polygon.site.originalObject.data.originalData;
-      const points = polygon.map((pair) => ({ x: pair[0], y: pair[1] }));
-      cells.push({ path: seed.path, points, center: polygonCenter(points) });
-    }
-    if (cells.length === safeSeeds.length) return cells;
-  } catch {
-    // Fall back to a regular Voronoi partition when weighted convergence fails.
+  const delaunay = Delaunay.from(
+    safeSeeds,
+    (seed) => seed.position.x,
+    (seed) => seed.position.y
+  );
+  const { center, radius } = frame;
+  const voronoi = delaunay.voronoi([
+    center.x - radius,
+    center.y - radius,
+    center.x + radius,
+    center.y + radius
+  ]);
+  const cells: RegionCell[] = [];
+  for (let index = 0; index < safeSeeds.length; index += 1) {
+    const seed = safeSeeds[index];
+    const polygon = voronoi.cellPolygon(index);
+    if (seed === undefined) continue;
+    const points = clipToCircle(openPolygon(polygon), circle);
+    if (points.length < 3) continue;
+    cells.push({ id: seed.id, path: seed.path, points, center: seed.position });
   }
-  return fallbackCells(safeSeeds, clip);
+  return {
+    cells,
+    boundaries: regionBoundaries(cells),
+    pathAt: (point) => {
+      if (Math.hypot(point.x - center.x, point.y - center.y) > radius) return null;
+      return safeSeeds[delaunay.find(point.x, point.y)]?.path ?? null;
+    }
+  };
 }

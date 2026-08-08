@@ -17,8 +17,8 @@ import {
 } from "./constants";
 import { anchorId } from "./folders";
 import { LayoutRunner } from "./layout";
-import { buildRegionCells, buildRegionPath, isInside, regionFrame } from "./regions";
-import type { RegionSeed } from "./regions";
+import { buildRegionPartition, buildRegionPath, regionFrame } from "./regions";
+import type { RegionBoundary, RegionSeed } from "./regions";
 import { planNodeStage, stageBatchSize } from "./staging";
 import type {
   ContourGraphSettings,
@@ -55,7 +55,6 @@ interface EdgeAttrs extends Attributes {
 
 interface DrawnRegion {
   folder: FolderRegion;
-  points: Point[];
   center: Point;
   path: Path2D;
 }
@@ -149,6 +148,8 @@ export class GraphRenderer {
   private hoverPoint: Point | null = null;
   private regionTime = 0;
   private regions: DrawnRegion[] = [];
+  private boundaries: RegionBoundary[] = [];
+  private regionAt: (point: Point) => string | null = () => null;
   private activeFolder: string | null = null;
   private activePoint: Point | null = null;
   private dragNode: string | null = null;
@@ -400,14 +401,7 @@ export class GraphRenderer {
     this.hoverFrame = null;
     const point = this.hoverPoint;
     if (point === null || this.dragNode !== null || this.activePoint !== null || this.isKilled) return;
-    let folder: string | null = null;
-    for (const region of this.regions) {
-      if (isInside(point, region.points)) {
-        folder = region.folder.path;
-        break;
-      }
-    }
-    this.setActiveFolder(folder, null);
+    this.setActiveFolder(this.regionAt(point), null);
   }
 
   private cancelHover(): void {
@@ -470,41 +464,36 @@ export class GraphRenderer {
     this.regionFrame = null;
     this.regionTime = performance.now();
 
-    const allPoints: Point[] = [];
-    this.graph.forEachNode((_id, attrs) => {
-      allPoints.push(this.sigma.graphToViewport({ x: attrs.x, y: attrs.y }));
-    });
     const seeds: RegionSeed[] = [];
     for (const folder of this.model.regions) {
-      const memberPoints: Point[] = [];
-      for (const id of folder.nodes) {
-        if (!this.graph.hasNode(id)) continue;
-        const attrs = this.graph.getNodeAttributes(id);
-        memberPoints.push(this.sigma.graphToViewport({ x: attrs.x, y: attrs.y }));
+      for (const id of [anchorId(folder.path), ...folder.nodes]) {
+        const position = this.viewportPoint(id);
+        if (position === null) continue;
+        seeds.push({ id, path: folder.path, position });
       }
-      const anchor = this.viewportPoint(anchorId(folder.path));
-      const position = this.seedPosition(memberPoints, anchor);
-      if (position === null) continue;
-      seeds.push({ path: folder.path, position, weight: Math.max(1, folder.nodes.length) });
     }
 
-    const frame = regionFrame(allPoints, this.settings.folder.regionPadding);
+    const frame = regionFrame(seeds.map((seed) => seed.position), this.settings.folder.regionPadding);
     if (frame === null || seeds.length === 0) {
       this.regions = [];
+      this.boundaries = [];
+      this.regionAt = () => null;
       this.paintRegions();
       return;
     }
     const folders = new Map(this.model.regions.map((folder) => [folder.path, folder]));
-    this.regions = buildRegionCells(seeds, frame).flatMap((cell): DrawnRegion[] => {
+    const partition = buildRegionPartition(seeds, frame);
+    this.regions = partition.cells.flatMap((cell): DrawnRegion[] => {
       const folder = folders.get(cell.path);
       if (folder === undefined) return [];
       return [{
         folder,
-        points: cell.points,
         center: cell.center,
         path: buildRegionPath(cell.points)
       }];
     });
+    this.boundaries = partition.boundaries;
+    this.regionAt = partition.pathAt;
     this.paintRegions();
   }
 
@@ -533,12 +522,22 @@ export class GraphRenderer {
       this.ctx.fill(region.path);
     }
     const borderColor = readRegionBorderColor(this.container);
-    for (const region of this.regions) {
-      const isActive = region.folder.path === this.activeFolder;
-      this.ctx.globalAlpha = isActive ? REGION_STYLE.activeBorderAlpha : REGION_STYLE.borderAlpha;
-      this.ctx.strokeStyle = isActive ? region.folder.color : borderColor;
-      this.ctx.lineWidth = isActive ? REGION_STYLE.activeWidth : REGION_STYLE.idleWidth;
-      this.ctx.stroke(region.path);
+    this.strokeBoundaries(
+      this.boundaries,
+      borderColor,
+      REGION_STYLE.borderAlpha,
+      REGION_STYLE.idleWidth
+    );
+    if (this.activeFolder !== null) {
+      const folder = this.model.regions.find((entry) => entry.path === this.activeFolder);
+      if (folder !== undefined) {
+        this.strokeBoundaries(
+          this.boundaries.filter((boundary) => boundary.paths.includes(folder.path)),
+          folder.color,
+          REGION_STYLE.activeBorderAlpha,
+          REGION_STYLE.activeWidth
+        );
+      }
     }
     this.ctx.globalAlpha = 1;
     this.drawLabel();
@@ -550,21 +549,22 @@ export class GraphRenderer {
     return this.sigma.graphToViewport({ x: attrs.x, y: attrs.y });
   }
 
-  private seedPosition(points: readonly Point[], anchor: Point | null): Point | null {
-    if (points.length === 0) return anchor;
-    let x = 0;
-    let y = 0;
-    for (const point of points) {
-      x += point.x;
-      y += point.y;
+  private strokeBoundaries(
+    boundaries: readonly RegionBoundary[],
+    color: string,
+    alpha: number,
+    width: number
+  ): void {
+    if (boundaries.length === 0) return;
+    this.ctx.beginPath();
+    for (const boundary of boundaries) {
+      this.ctx.moveTo(boundary.start.x, boundary.start.y);
+      this.ctx.lineTo(boundary.end.x, boundary.end.y);
     }
-    const divisor = points.length;
-    const center = { x: x / divisor, y: y / divisor };
-    if (anchor === null) return center;
-    return {
-      x: center.x * 0.75 + anchor.x * 0.25,
-      y: center.y * 0.75 + anchor.y * 0.25
-    };
+    this.ctx.globalAlpha = alpha;
+    this.ctx.strokeStyle = color;
+    this.ctx.lineWidth = width;
+    this.ctx.stroke();
   }
 
   private drawLabel(): void {

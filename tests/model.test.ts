@@ -62,8 +62,8 @@ describe("vault graph model", () => {
     if (!result.ok) return;
     const regions = new Map(result.value.regions.map((region) => [region.path, region.nodes]));
     expect(regions.get("/")).toEqual(["Root.md"]);
-    expect(regions.has("/A")).toBe(false);
-    expect(regions.has("/A/B")).toBe(false);
+    expect(regions.get("/A")).toEqual([]);
+    expect(regions.get("/A/B")).toEqual([]);
     expect(regions.get("/A/B/C")).toEqual(["A/B/C/Deep.md"]);
     expect(result.value.nodes.some((node) => node.id === "folder:/")).toBe(true);
     expect(result.value.nodes.some((node) => node.id === "folder:/A/B/C")).toBe(true);

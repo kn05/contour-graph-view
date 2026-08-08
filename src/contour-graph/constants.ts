@@ -30,9 +30,7 @@ export const NODE_SIZE_OPTS = {
 } as const;
 export const REGION_OPTS = {
   circlePoints: 64,
-  convergenceRatio: 0.035,
-  maxIterations: 18,
-  minWeightRatio: 0.015,
+  edgePrecision: 1_000,
   minRadius: 56,
   siteJitter: 0.01
 } as const;
