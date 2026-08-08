@@ -8,6 +8,7 @@ import {
   CONTOUR_DRAW_DELAY,
   CONTOUR_MIN_EDGE_FACTOR,
   CONTOUR_NODE_DELAY,
+  CONTOUR_SIMPLE_NODE_LIMIT,
   DEFAULT_EDGE_COLOR,
   DEFAULT_LABEL_COLOR,
   MAX_CONTOUR_DELAY,
@@ -17,12 +18,14 @@ import {
 } from "./constants";
 import {
   buildContour,
+  buildCapsuleContour,
   buildContourPath,
   contourAlpha,
   isInside,
   paintContour,
   polygonCenter
 } from "./contours";
+import type { ContourNode } from "./contours";
 import { expandPoint, folderDepth } from "./folders";
 import { LayoutRunner } from "./layout";
 import { planNodeStage, stageBatchSize } from "./staging";
@@ -64,6 +67,15 @@ interface DrawnContour {
   points: Point[];
   center: Point;
   path: Path2D;
+}
+
+interface ContourNodeCache extends ContourNode {
+  expanded: Point[];
+}
+
+interface ContourSeed {
+  nodes: ContourNode[];
+  points: Point[];
 }
 
 export interface RenderHooks {
@@ -468,15 +480,17 @@ export class GraphRenderer {
     this.contourFrame = null;
     this.contourTime = performance.now();
     const contours: DrawnContour[] = [];
-    const cache = new Map<string, Point[]>();
+    const cache = new Map<string, ContourNodeCache>();
     const minEdge = this.settings.folder.contourPadding * CONTOUR_MIN_EDGE_FACTOR;
 
     for (const folder of this.model.folders) {
       if (folder.nodes.length < this.settings.folder.minNodes) continue;
       try {
-        const points = this.contourPoints(folder, cache);
-        if (points.length < 3) continue;
-        const polygon = buildContour(points, minEdge);
+        const seed = this.contourSeed(folder, cache);
+        if (seed.nodes.length < this.settings.folder.minNodes) continue;
+        const polygon = seed.nodes.length <= CONTOUR_SIMPLE_NODE_LIMIT
+          ? buildCapsuleContour(seed.nodes)
+          : buildContour(seed.points, minEdge);
         if (polygon.length < 3) continue;
         contours.push({
           folder,
@@ -515,12 +529,14 @@ export class GraphRenderer {
     this.drawLabel();
   }
 
-  private contourPoints(folder: FolderGroup, cache: Map<string, Point[]>): Point[] {
+  private contourSeed(folder: FolderGroup, cache: Map<string, ContourNodeCache>): ContourSeed {
+    const nodes: ContourNode[] = [];
     const points: Point[] = [];
     for (const id of folder.nodes) {
       const cached = cache.get(id);
       if (cached !== undefined) {
-        points.push(...cached);
+        nodes.push(cached);
+        points.push(...cached.expanded);
         continue;
       }
       if (!this.graph.hasNode(id)) continue;
@@ -529,10 +545,12 @@ export class GraphRenderer {
       const point = this.sigma.graphToViewport({ x: attrs.x, y: attrs.y });
       const radius = this.settings.folder.contourPadding + attrs.size;
       const expanded = expandPoint(point, radius);
-      cache.set(id, expanded);
+      const node = { point, radius, expanded };
+      cache.set(id, node);
+      nodes.push(node);
       points.push(...expanded);
     }
-    return points;
+    return { nodes, points };
   }
 
   private drawLabel(): void {

@@ -24,6 +24,8 @@ export const BASE_EDGE_SIZE = 1.6;
 export const FOLDER_EDGE_WEIGHT = 0.18;
 export const PARENT_EDGE_FACTOR = 0.5;
 export const CONTOUR_POINTS = 6;
+export const CONTOUR_CAPSULE_POINTS = 32;
+export const CONTOUR_SIMPLE_NODE_LIMIT = 3;
 export const CONTOUR_CONCAVITY = 2.5;
 export const CONTOUR_MIN_EDGE_FACTOR = 0.2;
 export const CONTOUR_SMOOTH_STEPS = 2;
@@ -51,8 +53,12 @@ export const LAYOUT_OPTS = {
   slowDownFloor: 1,
   slowDownBase: 4,
   linkStrengthFloor: 0.1,
-  moveEase: 0.12,
-  maxNodeStep: 1.5
+  moveEase: 0.32,
+  maxNodeStep: 2,
+  frameBaseDelay: 16,
+  frameEaseMs: 90,
+  frameMaxDelay: 34,
+  settleDistance: 0.002
 } as const;
 
 export const RENDER_OPTS = {

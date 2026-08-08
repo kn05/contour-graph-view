@@ -1,5 +1,6 @@
 import concaveman from "concaveman";
 import {
+  CONTOUR_CAPSULE_POINTS,
   CONTOUR_CONCAVITY,
   CONTOUR_SMOOTH_STEPS,
   CONTOUR_STYLE,
@@ -8,6 +9,11 @@ import {
   MIN_CONTOUR_ALPHA
 } from "./constants";
 import type { Point } from "./types";
+
+export interface ContourNode {
+  point: Point;
+  radius: number;
+}
 
 export function contourAlpha(depth: number, maxDepth: number, opacity: number): number {
   const range = Math.max(1, maxDepth);
@@ -83,6 +89,57 @@ export function buildContour(points: readonly Point[], minEdge = 0): Point[] {
     polygon.pop();
   }
   return smoothPoints(polygon);
+}
+
+export function buildCapsuleContour(nodes: readonly ContourNode[]): Point[] {
+  const valid = nodes.filter((node) => {
+    return Number.isFinite(node.point.x) && Number.isFinite(node.point.y)
+      && Number.isFinite(node.radius) && node.radius > 0;
+  });
+  const first = valid[0];
+  if (first === undefined) return [];
+  let start = first;
+  let end = first;
+  let maxDistance = 0;
+  for (let left = 0; left < valid.length; left += 1) {
+    const a = valid[left];
+    if (a === undefined) continue;
+    for (let right = left + 1; right < valid.length; right += 1) {
+      const b = valid[right];
+      if (b === undefined) continue;
+      const distance = Math.hypot(b.point.x - a.point.x, b.point.y - a.point.y);
+      if (distance > maxDistance) {
+        start = a;
+        end = b;
+        maxDistance = distance;
+      }
+    }
+  }
+
+  const ux = maxDistance === 0 ? 1 : (end.point.x - start.point.x) / maxDistance;
+  const uy = maxDistance === 0 ? 0 : (end.point.y - start.point.y) / maxDistance;
+  const vx = -uy;
+  const vy = ux;
+  let radius = Math.max(start.radius, end.radius);
+  for (const node of valid) {
+    const dx = node.point.x - start.point.x;
+    const dy = node.point.y - start.point.y;
+    const offset = Math.abs(dx * vx + dy * vy);
+    radius = Math.max(radius, node.radius + offset);
+  }
+
+  const points: Point[] = [];
+  for (let index = 0; index < CONTOUR_CAPSULE_POINTS; index += 1) {
+    const angle = index * Math.PI * 2 / CONTOUR_CAPSULE_POINTS;
+    const along = Math.cos(angle);
+    const across = Math.sin(angle);
+    const center = along >= 0 ? end.point : start.point;
+    points.push({
+      x: center.x + (ux * along + vx * across) * radius,
+      y: center.y + (uy * along + vy * across) * radius
+    });
+  }
+  return points;
 }
 
 export function buildContourPath(points: readonly Point[]): Path2D {

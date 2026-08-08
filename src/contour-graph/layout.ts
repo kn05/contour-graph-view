@@ -28,6 +28,19 @@ export function easeLayoutPoint(current: Point, next: Point): Point {
   };
 }
 
+export function tweenLayoutPoint(current: Point, target: Point, elapsed: number): Point {
+  if (!Number.isFinite(target.x) || !Number.isFinite(target.y)) return current;
+  const dx = target.x - current.x;
+  const dy = target.y - current.y;
+  if (Math.hypot(dx, dy) <= LAYOUT_OPTS.settleDistance) return target;
+  const time = Math.min(LAYOUT_OPTS.frameMaxDelay, Math.max(0, elapsed));
+  const ratio = 1 - Math.exp(-time / LAYOUT_OPTS.frameEaseMs);
+  return {
+    x: current.x + dx * ratio,
+    y: current.y + dy * ratio
+  };
+}
+
 export function mapLayoutOpts(settings: ContourGraphSettings, order: number): ForceAtlas2Settings {
   const repel = settings.graph.repelStrength / LAYOUT_OPTS.repelBase;
   const distance = Math.sqrt(settings.graph.linkDistance / LAYOUT_OPTS.distanceBase);
@@ -61,6 +74,9 @@ export class LayoutRunner<NodeAttrs extends Attributes & Point, EdgeAttrs extend
   private saveTimer: number | null = null;
   private readonly gen = new GenGate();
   private readonly points = new Map<string, Point>();
+  private readonly targets = new Map<string, Point>();
+  private motionFrame: number | null = null;
+  private motionTime: number | null = null;
   private isSmooth = true;
   private isKilled = false;
 
@@ -77,8 +93,11 @@ export class LayoutRunner<NodeAttrs extends Attributes & Point, EdgeAttrs extend
     if (this.isKilled || this.graph.order === 0 || this.layout !== null) return;
     const gen = this.gen.next();
     this.points.clear();
+    this.targets.clear();
     this.graph.forEachNode((id, attrs) => {
-      this.points.set(id, { x: attrs.x, y: attrs.y });
+      const point = { x: attrs.x, y: attrs.y };
+      this.points.set(id, point);
+      this.targets.set(id, point);
     });
     try {
       this.layout = new FA2Layout<NodeAttrs, EdgeAttrs>(this.graph, {
@@ -88,13 +107,19 @@ export class LayoutRunner<NodeAttrs extends Attributes & Point, EdgeAttrs extend
           const current = this.points.get(id);
           if (current === undefined) return attrs;
           if (!this.gen.isCurrent(gen)) return { ...attrs, ...current };
-          const point = this.isSmooth ? easeLayoutPoint(current, attrs) : attrs;
-          this.points.set(id, { x: point.x, y: point.y });
-          return { ...attrs, ...point };
+          if (!this.isSmooth) {
+            const point = { x: attrs.x, y: attrs.y };
+            this.points.set(id, point);
+            this.targets.set(id, point);
+            return attrs;
+          }
+          this.targets.set(id, easeLayoutPoint(current, attrs));
+          return { ...attrs, ...current };
         },
         settings: mapLayoutOpts(settings, this.graph.order)
       });
       this.layout.start();
+      this.startMotion(gen);
       this.saveTimer = window.setInterval(() => {
         if (this.gen.isCurrent(gen)) this.hooks.save();
       }, LAYOUT_SAVE_DELAY);
@@ -116,6 +141,7 @@ export class LayoutRunner<NodeAttrs extends Attributes & Point, EdgeAttrs extend
     if (this.saveTimer !== null) window.clearInterval(this.saveTimer);
     this.stopTimer = null;
     this.saveTimer = null;
+    this.stopMotion();
     this.killWorker();
   }
 
@@ -139,5 +165,41 @@ export class LayoutRunner<NodeAttrs extends Attributes & Point, EdgeAttrs extend
     } catch {
       // The worker is already unusable.
     }
+  }
+
+  private startMotion(gen: number): void {
+    this.stopMotion();
+    const move = (time: number): void => {
+      this.motionFrame = null;
+      if (!this.gen.isCurrent(gen) || this.layout === null || this.isKilled) return;
+      const elapsed = this.motionTime === null ? LAYOUT_OPTS.frameBaseDelay : time - this.motionTime;
+      this.motionTime = time;
+      const moves = new Map<string, Point>();
+      for (const [id, current] of this.points) {
+        const target = this.targets.get(id);
+        if (target === undefined || !this.graph.hasNode(id)) continue;
+        const point = tweenLayoutPoint(current, target, elapsed);
+        if (point.x === current.x && point.y === current.y) continue;
+        this.points.set(id, point);
+        moves.set(id, point);
+      }
+      if (moves.size > 0) {
+        this.graph.updateEachNodeAttributes((id, attrs) => {
+          const point = moves.get(id);
+          if (point === undefined) return attrs;
+          attrs.x = point.x;
+          attrs.y = point.y;
+          return attrs;
+        }, { attributes: ["x", "y"] });
+      }
+      this.motionFrame = window.requestAnimationFrame(move);
+    };
+    this.motionFrame = window.requestAnimationFrame(move);
+  }
+
+  private stopMotion(): void {
+    if (this.motionFrame !== null) window.cancelAnimationFrame(this.motionFrame);
+    this.motionFrame = null;
+    this.motionTime = null;
   }
 }
