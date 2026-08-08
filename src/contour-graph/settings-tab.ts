@@ -60,7 +60,7 @@ function colorText(colors: Record<string, string>): string {
 }
 
 function excludedText(folders: readonly string[]): string {
-  if (folders.length === 0) return "No folders are excluded from attraction and contours.";
+  if (folders.length === 0) return "No folders are excluded from folder nodes, links, and contours.";
   const shown = folders.slice(0, 3).join(", ");
   const extra = folders.length > 3 ? ` and ${folders.length - 3} more` : "";
   return `Excluded: ${shown}${extra}. Notes and regular links remain visible.`;
@@ -183,22 +183,6 @@ export class ContourGraphSettingTab extends PluginSettingTab {
           }).open();
         }));
 
-    this.addFolderSlider(
-      "Folder attraction",
-      "Add virtual springs from notes to direct folders and from folders to their parents.",
-      "clusterStrength",
-      0,
-      1,
-      0.01
-    );
-    this.addFolderSlider(
-      "Folder separation",
-      "Push overlapping, unrelated top-level folder families apart.",
-      "separationStrength",
-      0,
-      0.5,
-      0.01
-    );
     this.addFolderSlider("Contour opacity", "Set the resting contour opacity.", "contourOpacity", 0, 0.3, 0.01);
     this.addFolderSlider("Contour padding", "Set the space around folder nodes.", "contourPadding", 4, 80, 1);
     this.addFolderSlider("Minimum files", "Only draw contours with at least this many files.", "minNodes", 2, 20, 1);
@@ -261,7 +245,7 @@ export class ContourGraphSettingTab extends PluginSettingTab {
     name: string,
     desc: string,
     key: keyof Pick<FolderOpts,
-      "clusterStrength" | "separationStrength" | "contourOpacity" | "contourPadding" | "minNodes"
+      "contourOpacity" | "contourPadding" | "minNodes"
     >,
     min: number,
     max: number,

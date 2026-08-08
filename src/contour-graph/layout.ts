@@ -7,12 +7,6 @@ import {
   LAYOUT_RUN_TIME,
   LAYOUT_SAVE_DELAY
 } from "./constants";
-import {
-  buildFolderShifts,
-  buildVirtualLinkShifts,
-  type FolderPoint
-} from "./folder-forces";
-import { topFolder } from "./folders";
 import { GenGate } from "./generation";
 import type { ContourGraphSettings, Point } from "./types";
 
@@ -23,8 +17,6 @@ export interface LayoutHooks {
 
 interface LayoutNode extends Point {
   fixed: boolean;
-  folder?: string | null;
-  kind?: string;
 }
 
 export function easeLayoutPoint(current: Point, next: Point): Point {
@@ -92,8 +84,6 @@ export class LayoutRunner<
   private readonly targets = new Map<string, Point>();
   private motionFrame: number | null = null;
   private motionTime: number | null = null;
-  private attractionStrength = 0;
-  private separationStrength = 0;
   private isSmooth = true;
   private isKilled = false;
 
@@ -116,8 +106,6 @@ export class LayoutRunner<
   start(settings: ContourGraphSettings): void {
     if (this.isKilled || this.graph.order === 0 || this.layout !== null) return;
     const gen = this.gen.next();
-    this.attractionStrength = settings.folder.clusterStrength;
-    this.separationStrength = settings.folder.separationStrength;
     this.points.clear();
     this.targets.clear();
     this.graph.forEachNode((id, attrs) => {
@@ -204,38 +192,12 @@ export class LayoutRunner<
       if (!this.gen.isCurrent(gen) || this.layout === null || this.isKilled) return;
       const elapsed = this.motionTime === null ? LAYOUT_OPTS.frameBaseDelay : time - this.motionTime;
       this.motionTime = time;
-      const frame = elapsed / LAYOUT_OPTS.frameBaseDelay;
       const moves = new Map<string, Point>();
-      const folderPoints: FolderPoint[] = [];
-      this.graph.forEachNode((id, attrs) => {
-        const point = this.points.get(id);
-        if (point === undefined || typeof attrs.folder !== "string") return;
-        const isAnchor = attrs.kind === "folder";
-        const isFile = attrs.kind === "file" || attrs.kind === "attachment";
-        if (!isAnchor && !isFile) return;
-        folderPoints.push({
-          id,
-          folder: attrs.folder,
-          isAnchor,
-          isFixed: attrs.fixed,
-          ...point
-        });
-      });
-      const folderShifts = buildFolderShifts(folderPoints, this.separationStrength, frame);
-      const nodeShifts = buildVirtualLinkShifts(folderPoints, this.attractionStrength, frame);
       for (const [id, current] of this.points) {
         const target = this.targets.get(id);
         if (target === undefined || !this.graph.hasNode(id)) continue;
         const attrs = this.graph.getNodeAttributes(id);
-        const tweened = tweenLayoutPoint(current, target, elapsed);
-        const folderShift = attrs.fixed || typeof attrs.folder !== "string"
-          ? undefined
-          : folderShifts.get(topFolder(attrs.folder));
-        const nodeShift = attrs.fixed ? undefined : nodeShifts.get(id);
-        const point = {
-          x: tweened.x + (folderShift?.x ?? 0) + (nodeShift?.x ?? 0),
-          y: tweened.y + (folderShift?.y ?? 0) + (nodeShift?.y ?? 0)
-        };
+        const point = attrs.fixed ? current : tweenLayoutPoint(current, target, elapsed);
         if (point.x === current.x && point.y === current.y) continue;
         this.points.set(id, point);
         moves.set(id, point);

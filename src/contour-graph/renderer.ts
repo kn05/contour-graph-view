@@ -26,7 +26,7 @@ import {
   polygonCenter
 } from "./contours";
 import type { ContourNode } from "./contours";
-import { expandPoint, folderDepth } from "./folders";
+import { anchorId, expandPoint, folderDepth } from "./folders";
 import { LayoutRunner } from "./layout";
 import { planNodeStage, stageBatchSize } from "./staging";
 import type {
@@ -54,7 +54,7 @@ interface NodeAttrs extends Attributes {
 }
 
 interface EdgeAttrs extends Attributes {
-  kind: "link" | "tag";
+  kind: GraphEdge["kind"];
   weight: number;
   size: number;
   color: string;
@@ -123,7 +123,7 @@ function edgeAttrs(edge: GraphEdge, settings: ContourGraphSettings): EdgeAttrs {
     size: BASE_EDGE_SIZE * settings.graph.lineSize,
     color: DEFAULT_EDGE_COLOR,
     hidden: edge.hidden,
-    type: settings.graph.showArrow ? "arrow" : "line"
+    type: settings.graph.showArrow && edge.kind !== "folder" ? "arrow" : "line"
   };
 }
 
@@ -183,7 +183,7 @@ export class GraphRenderer {
     this.sigma = new Sigma<NodeAttrs, EdgeAttrs>(this.graph, container, {
       allowInvalidContainer: false,
       defaultEdgeColor: DEFAULT_EDGE_COLOR,
-      defaultNodeColor: NODE_COLORS.file,
+      defaultNodeColor: NODE_COLORS.fileDark,
       edgeProgramClasses: { arrow: createEdgeArrowProgram<NodeAttrs, EdgeAttrs>() },
       hideEdgesOnMove: true,
       hideLabelsOnMove: true,
@@ -319,8 +319,7 @@ export class GraphRenderer {
       void this.openNode(node, event.original);
     });
     this.sigma.on("downNode", ({ node, event }) => {
-      const attrs = this.graph.getNodeAttributes(node);
-      if (attrs.path === null || !isMouseEvent(event.original) || event.original.button !== 0) return;
+      if (!isMouseEvent(event.original) || event.original.button !== 0) return;
       event.preventSigmaDefault();
       this.dragNode = node;
       this.didDrag = false;
@@ -386,7 +385,7 @@ export class GraphRenderer {
   private persistPositions(): void {
     const positions: Record<string, SavedPoint> = {};
     this.graph.forEachNode((id, attrs) => {
-      if (attrs.path === null) return;
+      if (attrs.path === null || !attrs.fixed) return;
       positions[id] = { x: attrs.x, y: attrs.y, fixed: attrs.fixed };
     });
     this.hooks.savePositions(positions);
@@ -535,7 +534,7 @@ export class GraphRenderer {
   private contourSeed(folder: FolderGroup, cache: Map<string, ContourNodeCache>): ContourSeed {
     const nodes: ContourNode[] = [];
     const points: Point[] = [];
-    for (const id of folder.nodes) {
+    for (const id of [anchorId(folder.path), ...folder.nodes]) {
       const cached = cache.get(id);
       if (cached !== undefined) {
         nodes.push(cached);

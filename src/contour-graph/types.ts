@@ -34,8 +34,6 @@ export interface GraphOpts {
 
 export interface FolderOpts {
   maxDepth: number | null;
-  clusterStrength: number;
-  separationStrength: number;
   contourOpacity: number;
   contourPadding: number;
   minNodes: number;
@@ -71,7 +69,7 @@ export interface GraphEdge {
   id: string;
   source: string;
   target: string;
-  kind: "link" | "tag";
+  kind: "link" | "tag" | "folder";
   weight: number;
   hidden: boolean;
 }

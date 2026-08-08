@@ -34,21 +34,19 @@ describe("plugin settings", () => {
       schemaVersion: SCHEMA_VERSION,
       folder: {
         contourPadding: 30,
-        excluded: [],
-        separationStrength: DEFAULT_SETTINGS.folder.separationStrength
+        excluded: []
       }
     }));
   });
 
-  it("migrates schema two with the default folder separation", () => {
+  it("migrates schema two after retiring custom folder forces", () => {
     const migrated = migrateSettings({ schemaVersion: 2, folder: { excluded: ["/Meta"] } });
     expect(migrated.ok).toBe(true);
     if (!migrated.ok) return;
     expect(migrated.value).toEqual(expect.objectContaining({
       schemaVersion: SCHEMA_VERSION,
       folder: {
-        excluded: ["/Meta"],
-        separationStrength: DEFAULT_SETTINGS.folder.separationStrength
+        excluded: ["/Meta"]
       }
     }));
   });
@@ -82,9 +80,33 @@ describe("plugin settings", () => {
     expect(settings.graph.colorGroups).toEqual([{ query: "tag:work", color: "#123456" }]);
     expect(settings.folder.maxDepth).toBeNull();
     expect(settings.folder.contourPadding).toBe(DEFAULT_SETTINGS.folder.contourPadding);
-    expect(settings.folder.separationStrength).toBe(DEFAULT_SETTINGS.folder.separationStrength);
     expect(settings.folder.excluded).toEqual(["/00_Meta"]);
-    expect(settings.positions).toEqual({ "Good.md": { x: 1, y: 2, fixed: false } });
+    expect(settings.positions).toEqual({});
+  });
+
+  it("migrates the old force layout to passive contours and keeps only pinned positions", () => {
+    const migrated = migrateSettings({
+      schemaVersion: 3,
+      folder: {
+        clusterStrength: 0.8,
+        separationStrength: 0.4,
+        contourOpacity: 0.09,
+        contourPadding: 24
+      },
+      positions: {
+        "Settled.md": { x: 1, y: 2, fixed: false },
+        "Pinned.md": { x: 3, y: 4, fixed: true }
+      }
+    });
+    expect(migrated.ok).toBe(true);
+    if (!migrated.ok) return;
+    expect(migrated.value.folder).toEqual({
+      contourOpacity: DEFAULT_SETTINGS.folder.contourOpacity,
+      contourPadding: DEFAULT_SETTINGS.folder.contourPadding
+    });
+    expect(migrated.value.positions).toEqual({
+      "Pinned.md": { x: 3, y: 4, fixed: true }
+    });
   });
 
   it("imports only validated Core Graph values and skips unsupported searches", () => {

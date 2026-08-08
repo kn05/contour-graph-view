@@ -1,7 +1,7 @@
 import type { App, TFile } from "obsidian";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "../src/contour-graph/constants";
-import { buildGraph, dropPositions, movePosition } from "../src/contour-graph/model";
+import { buildGraph, dropPositions, movePosition, savePositions } from "../src/contour-graph/model";
 import type { ContourGraphSettings, SavedPoint } from "../src/contour-graph/types";
 
 interface AppSeed {
@@ -67,7 +67,16 @@ describe("vault graph model", () => {
     expect(folders.has("/A/B/C")).toBe(false);
     expect(result.value.nodes.some((node) => node.id === "folder:/")).toBe(true);
     expect(result.value.nodes.some((node) => node.id === "folder:/A/B/C")).toBe(true);
-    expect(result.value.edges.some((edge) => edge.target.startsWith("folder:"))).toBe(false);
+    expect(result.value.edges).toContainEqual(expect.objectContaining({
+      source: "folder:/",
+      target: "folder:/A",
+      kind: "folder"
+    }));
+    expect(result.value.edges).toContainEqual(expect.objectContaining({
+      source: "folder:/A/B/C",
+      target: "A/B/C/Deep.md",
+      kind: "folder"
+    }));
     expect(folders.has("/Left/Shared")).toBe(true);
     expect(folders.has("/Right/Shared")).toBe(true);
   });
@@ -133,7 +142,7 @@ describe("vault graph model", () => {
     expect(result.value.folders.some((folder) => folder.path.startsWith("/00_Meta"))).toBe(false);
   });
 
-  it("keeps folder membership virtual instead of adding physical graph edges", () => {
+  it("adds Folders to Graph-style structural nodes and links", () => {
     const app = makeApp({
       files: [
         makeFile("Folder/Linked.md"),
@@ -146,12 +155,39 @@ describe("vault graph model", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.nodes.some((node) => node.id === "folder:/Folder")).toBe(true);
-    expect(result.value.edges).toHaveLength(1);
-    expect(result.value.edges[0]).toEqual(expect.objectContaining({
+    expect(result.value.edges).toContainEqual(expect.objectContaining({
       source: "Folder/Linked.md",
       target: "Folder/Target.md",
       kind: "link"
     }));
+    expect(result.value.edges).toContainEqual(expect.objectContaining({
+      source: "folder:/",
+      target: "folder:/Folder",
+      kind: "folder",
+      hidden: false
+    }));
+    expect(result.value.edges.filter((edge) => {
+      return edge.kind === "folder" && edge.source === "folder:/Folder";
+    })).toHaveLength(3);
+    expect(result.value.nodes.find((node) => node.id === "folder:/Folder")).toEqual(
+      expect.objectContaining({ hidden: false, kind: "folder" })
+    );
+    const folder = result.value.nodes.find((node) => node.id === "folder:/Folder");
+    const leaf = result.value.nodes.find((node) => node.id === "Folder/Unlinked.md");
+    expect(folder?.size ?? 0).toBeGreaterThan(leaf?.size ?? 0);
+  });
+
+  it("persists pinned notes only", () => {
+    const app = makeApp({ files: [makeFile("Free.md"), makeFile("Pinned.md")] });
+    const result = buildGraph(app, makeSettings());
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const pinned = result.value.nodes.find((node) => node.id === "Pinned.md");
+    if (pinned === undefined) throw new Error("Pinned fixture node is missing.");
+    pinned.fixed = true;
+    const positions = savePositions(result.value);
+    expect(Object.keys(positions)).toEqual(["Pinned.md"]);
+    expect(positions["Pinned.md"]).toEqual({ x: pinned.x, y: pinned.y, fixed: true });
   });
 
   it("moves and deletes file or folder position subtrees", () => {

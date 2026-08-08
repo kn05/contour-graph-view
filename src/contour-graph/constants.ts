@@ -2,7 +2,7 @@ import type { ContourGraphSettings } from "./types";
 
 export const VIEW_TYPE = "contour-graph-view";
 export const VIEW_NAME = "Contour Graph View";
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 export const ROOT_FOLDER = "/";
 export const FOLDER_PREFIX = "folder:";
 export const TAG_PREFIX = "tag:";
@@ -19,23 +19,30 @@ export const MAX_QUERY_LENGTH = 4_096;
 export const MAX_QUERY_TOKENS = 512;
 export const MAX_EXCLUDED_FOLDERS = 512;
 export const MAX_FOLDER_PATH_LENGTH = 1_024;
-export const BASE_NODE_SIZE = 6;
-export const BASE_EDGE_SIZE = 1.6;
-export const DEFAULT_FOLDER_ATTRACTION = 0.18;
+export const BASE_NODE_SIZE = 4;
+export const BASE_EDGE_SIZE = 0.8;
+export const NODE_SIZE_OPTS = {
+  base: 0.76,
+  degreeStep: 0.24,
+  max: 2.4,
+  folderFactor: 1.12,
+  mutedFactor: 0.82
+} as const;
 export const CONTOUR_POINTS = 6;
 export const CONTOUR_CAPSULE_POINTS = 32;
-export const CONTOUR_SIMPLE_NODE_LIMIT = 3;
-export const CONTOUR_CONCAVITY = 2.5;
+export const CONTOUR_SIMPLE_NODE_LIMIT = 2;
+export const CONTOUR_CONCAVITY = 1.6;
 export const CONTOUR_MIN_EDGE_FACTOR = 0.2;
 export const CONTOUR_SMOOTH_STEPS = 2;
 export const MAX_CONTOUR_VERTICES = 2_048;
-export const MIN_CONTOUR_ALPHA = 0.012;
-export const MAX_CONTOUR_ALPHA = 0.2;
+export const MIN_CONTOUR_ALPHA = 0;
+export const MAX_CONTOUR_ALPHA = 0.16;
 export const DEFAULT_EDGE_COLOR = "#7f8796";
 export const DEFAULT_LABEL_COLOR = "#d7dce5";
 export const NODE_COLORS = {
-  file: "#8b9cff",
-  muted: "#94a3b8",
+  fileDark: "#b8bdc7",
+  fileLight: "#737985",
+  muted: "#9298a3",
   tag: "#f59e0b"
 } as const;
 
@@ -64,7 +71,7 @@ export const RENDER_OPTS = {
   labelDensity: 0.75,
   labelBase: 6,
   labelFadeFactor: 2,
-  minEdgeThickness: 1,
+  minEdgeThickness: 0.5,
   stagePadding: 40,
   cameraMinRatio: 0.05,
   cameraMaxRatio: 10,
@@ -80,25 +87,10 @@ export const STAGE_OPTS = {
   maxBatch: 192
 } as const;
 
-export const SEPARATION_OPTS = {
-  gap: 6,
-  maxShift: 0.35,
-  maxNeighbors: 32
-} as const;
-
-export const VIRTUAL_LINK_OPTS = {
-  pullFactor: 0.15,
-  parentFactor: 0.75,
-  maxNodeShift: 0.45,
-  maxAnchorShift: 0.2,
-  maxParentShift: 0.3,
-  maxFrameScale: 2
-} as const;
-
 export const CONTOUR_STYLE = {
-  parentAlpha: 0.08,
-  childAlpha: 0.92,
-  depthPower: 1.6,
+  parentAlpha: 0.035,
+  childAlpha: 0.965,
+  depthPower: 2.1,
   activeFill: 2.2,
   activeStroke: 0.72,
   strokeAlpha: 0.34,
@@ -128,10 +120,8 @@ export const DEFAULT_SETTINGS: ContourGraphSettings = {
   },
   folder: {
     maxDepth: null,
-    clusterStrength: DEFAULT_FOLDER_ATTRACTION,
-    separationStrength: 0.12,
-    contourOpacity: 0.09,
-    contourPadding: 24,
+    contourOpacity: 0.055,
+    contourPadding: 14,
     minNodes: 2,
     excluded: [],
     colors: {}

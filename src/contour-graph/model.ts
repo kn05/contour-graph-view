@@ -1,6 +1,7 @@
 import { getAllTags, type App, type CachedMetadata, type TFile } from "obsidian";
 import {
   BASE_NODE_SIZE,
+  NODE_SIZE_OPTS,
   NODE_COLORS,
   ROOT_FOLDER,
   TAG_PREFIX,
@@ -14,6 +15,7 @@ import {
   folderDepth,
   initialPoint,
   isFolderExcluded,
+  parentFolder,
   sortFolders
 } from "./folders";
 import { matchQuery, parseQuery } from "./query";
@@ -72,21 +74,24 @@ function parseGroups(groups: readonly ColorGroup[], warnings: string[]): ParsedG
   return parsed;
 }
 
-function nodeColor(info: FileInfo, groups: readonly ParsedGroup[]): string {
+function nodeColor(info: FileInfo, groups: readonly ParsedGroup[], isDark: boolean): string {
   const ctx = matchCtx(info);
   for (const group of groups) {
     if (matchQuery(group.node, ctx)) return group.color;
   }
-  return info.kind === "attachment" ? NODE_COLORS.muted : NODE_COLORS.file;
+  if (info.kind === "attachment") return NODE_COLORS.muted;
+  return isDark ? NODE_COLORS.fileDark : NODE_COLORS.fileLight;
 }
 
 function addFileNode(
   nodes: Map<string, GraphNode>,
   info: FileInfo,
   settings: ContourGraphSettings,
-  groups: readonly ParsedGroup[]
+  groups: readonly ParsedGroup[],
+  isDark: boolean
 ): void {
-  const saved = settings.positions[info.file.path];
+  const candidate = settings.positions[info.file.path];
+  const saved = candidate?.fixed === true ? candidate : undefined;
   const point = saved ?? initialPoint(info.file.path);
   nodes.set(info.file.path, {
     id: info.file.path,
@@ -95,7 +100,7 @@ function addFileNode(
     path: info.file.path,
     folder: info.folder,
     tags: info.tags,
-    color: nodeColor(info, groups),
+    color: nodeColor(info, groups, isDark),
     size: BASE_NODE_SIZE * settings.graph.nodeSize,
     x: point.x,
     y: point.y,
@@ -222,7 +227,9 @@ function dropOrphans(nodes: Map<string, GraphNode>, edges: Map<string, GraphEdge
 
 function addFolders(
   nodes: Map<string, GraphNode>,
-  settings: ContourGraphSettings
+  edges: Map<string, GraphEdge>,
+  settings: ContourGraphSettings,
+  isDark: boolean
 ): FolderGroup[] {
   const members = new Map<string, Set<string>>();
   const anchors = new Set<string>();
@@ -230,7 +237,6 @@ function addFolders(
     return node.path !== null && node.folder !== null
       && !isFolderExcluded(node.folder, settings.folder.excluded);
   });
-  const isDark = usesDarkTheme();
   for (const node of nodes.values()) {
     const isFile = node.kind === "file" || node.kind === "attachment";
     if (isFile && node.folder !== null && isFolderExcluded(node.folder, settings.folder.excluded)) {
@@ -256,6 +262,28 @@ function addFolders(
 
   for (const folder of anchors) {
     ensureFolderNode(nodes, folder, settings, isDark);
+  }
+
+  for (const file of files) {
+    const direct = file.folder ?? ROOT_FOLDER;
+    addEdge(edges, {
+      source: anchorId(direct),
+      target: file.id,
+      kind: "folder",
+      weight: settings.graph.linkStrength,
+      hidden: false
+    });
+  }
+
+  for (const folder of anchors) {
+    if (folder === ROOT_FOLDER) continue;
+    addEdge(edges, {
+      source: anchorId(parentFolder(folder)),
+      target: anchorId(folder),
+      kind: "folder",
+      weight: settings.graph.linkStrength,
+      hidden: false
+    });
   }
 
   const groups = [...members].map(([path, ids]) => ({
@@ -284,12 +312,37 @@ function ensureFolderNode(
     folder,
     tags: [],
     color: folderColor(folder, settings.folder.colors, isDark),
-    size: 0.1,
+    size: BASE_NODE_SIZE * settings.graph.nodeSize,
     x: point.x,
     y: point.y,
-    hidden: true,
+    hidden: false,
     fixed: false
   });
+}
+
+function scaleNodeSizes(
+  nodes: Map<string, GraphNode>,
+  edges: Map<string, GraphEdge>,
+  settings: ContourGraphSettings
+): void {
+  const degree = new Map<string, number>();
+  for (const edge of edges.values()) {
+    if (edge.hidden) continue;
+    degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1);
+    degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
+  }
+  for (const node of nodes.values()) {
+    const weight = Math.min(
+      NODE_SIZE_OPTS.max,
+      NODE_SIZE_OPTS.base + Math.log2((degree.get(node.id) ?? 0) + 1) * NODE_SIZE_OPTS.degreeStep
+    );
+    let kind = 1;
+    if (node.kind === "folder") kind = NODE_SIZE_OPTS.folderFactor;
+    else if (node.kind === "attachment" || node.kind === "unresolved") {
+      kind = NODE_SIZE_OPTS.mutedFactor;
+    }
+    node.size = BASE_NODE_SIZE * settings.graph.nodeSize * weight * kind;
+  }
 }
 
 function collectFiles(app: App, settings: ContourGraphSettings): FileInfo[] {
@@ -324,15 +377,17 @@ export function buildGraph(app: App, settings: ContourGraphSettings): Result<Gra
   const nodes = new Map<string, GraphNode>();
   const edges = new Map<string, GraphEdge>();
   const files = collectFiles(app, settings);
+  const isDark = usesDarkTheme();
 
   for (const info of files) {
     if (filter !== null && !matchQuery(filter, matchCtx(info))) continue;
-    addFileNode(nodes, info, settings, groups);
+    addFileNode(nodes, info, settings, groups, isDark);
   }
   addFileLinks(app, nodes, edges, settings);
   addTagNodes(nodes, edges, settings);
   if (!settings.graph.showOrphans) dropOrphans(nodes, edges);
-  const folders = addFolders(nodes, settings);
+  const folders = addFolders(nodes, edges, settings, isDark);
+  scaleNodeSizes(nodes, edges, settings);
 
   return {
     ok: true,
@@ -344,7 +399,7 @@ export function buildGraph(app: App, settings: ContourGraphSettings): Result<Gra
 export function savePositions(model: GraphModel): Record<string, SavedPoint> {
   const positions: Record<string, SavedPoint> = {};
   for (const node of model.nodes) {
-    if (node.path === null) continue;
+    if (node.path === null || !node.fixed) continue;
     positions[node.path] = { x: node.x, y: node.y, fixed: node.fixed };
   }
   return positions;

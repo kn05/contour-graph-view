@@ -68,27 +68,6 @@ function makeGraph(): DirectedGraph<NodeAttrs, EdgeAttrs> {
   return graph;
 }
 
-function makeFolderGraph(): DirectedGraph<NodeAttrs, EdgeAttrs> {
-  const graph = new DirectedGraph<NodeAttrs, EdgeAttrs>();
-  graph.addNode("folder:/A", {
-    x: 0,
-    y: 0,
-    size: 0.1,
-    fixed: false,
-    folder: "/A",
-    kind: "folder"
-  });
-  graph.addNode("A/Free.md", {
-    x: 50,
-    y: 0,
-    size: 6,
-    fixed: false,
-    folder: "/A",
-    kind: "file"
-  });
-  return graph;
-}
-
 describe("layout worker lifecycle", () => {
   beforeEach(() => {
     stats.live = 0;
@@ -179,19 +158,6 @@ describe("layout worker lifecycle", () => {
       size: 4,
       fixed: true
     });
-    runner.kill();
-  });
-
-  it("compacts a distant unlinked note during the visible motion frame", () => {
-    const graph = makeFolderGraph();
-    expect(graph.size).toBe(0);
-    const runner = new LayoutRunner(graph, { save: () => undefined, showError: () => undefined });
-    runner.start(DEFAULT_SETTINGS);
-    const frame = nextFrame;
-    if (frame === null) throw new Error("The motion frame was not scheduled.");
-    frame(16);
-    expect(graph.getNodeAttribute("A/Free.md", "x")).toBeLessThan(50);
-    expect(graph.getNodeAttribute("folder:/A", "x")).toBeGreaterThan(0);
     runner.kill();
   });
 
