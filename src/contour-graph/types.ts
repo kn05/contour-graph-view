@@ -35,6 +35,7 @@ export interface GraphOpts {
 export interface FolderOpts {
   maxDepth: number | null;
   clusterStrength: number;
+  separationStrength: number;
   contourOpacity: number;
   contourPadding: number;
   minNodes: number;

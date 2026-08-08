@@ -75,6 +75,9 @@ describe("vault graph model", () => {
       target: "folder:/A/B/C",
       kind: "folder"
     }));
+    expect(result.value.edges.some((edge) => {
+      return edge.kind === "folder" && edge.source === "folder:/A" && edge.target === "folder:/";
+    })).toBe(false);
     expect(folders.has("/Left/Shared")).toBe(true);
     expect(folders.has("/Right/Shared")).toBe(true);
   });

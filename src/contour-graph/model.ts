@@ -1,6 +1,7 @@
 import { getAllTags, type App, type CachedMetadata, type TFile } from "obsidian";
 import {
   BASE_NODE_SIZE,
+  FOLDER_EDGE_WEIGHT,
   NODE_COLORS,
   PARENT_EDGE_FACTOR,
   ROOT_FOLDER,
@@ -237,6 +238,7 @@ function addFolders(
   });
   const isDark = usesDarkTheme();
   const weight = settings.graph.linkStrength * settings.folder.clusterStrength;
+  const parentWeight = settings.graph.linkStrength * FOLDER_EDGE_WEIGHT * PARENT_EDGE_FACTOR;
   const linked = new Set<string>();
   for (const edge of edges.values()) {
     if (edge.kind !== "link") continue;
@@ -272,12 +274,13 @@ function addFolders(
     ensureFolderNode(nodes, folder, settings, isDark);
     if (folder === ROOT_FOLDER) continue;
     const parent = parentFolder(folder);
+    if (parent === ROOT_FOLDER) continue;
     ensureFolderNode(nodes, parent, settings, isDark);
     addEdge(edges, {
       source: anchorId(folder),
       target: anchorId(parent),
       kind: "folder",
-      weight: weight * PARENT_EDGE_FACTOR,
+      weight: parentWeight,
       hidden: true
     });
   }

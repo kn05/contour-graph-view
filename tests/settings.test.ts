@@ -32,7 +32,24 @@ describe("plugin settings", () => {
     if (!migrated.ok) return;
     expect(migrated.value).toEqual(expect.objectContaining({
       schemaVersion: SCHEMA_VERSION,
-      folder: { contourPadding: 30, excluded: [] }
+      folder: {
+        contourPadding: 30,
+        excluded: [],
+        separationStrength: DEFAULT_SETTINGS.folder.separationStrength
+      }
+    }));
+  });
+
+  it("migrates schema two with the default folder separation", () => {
+    const migrated = migrateSettings({ schemaVersion: 2, folder: { excluded: ["/Meta"] } });
+    expect(migrated.ok).toBe(true);
+    if (!migrated.ok) return;
+    expect(migrated.value).toEqual(expect.objectContaining({
+      schemaVersion: SCHEMA_VERSION,
+      folder: {
+        excluded: ["/Meta"],
+        separationStrength: DEFAULT_SETTINGS.folder.separationStrength
+      }
     }));
   });
 
@@ -51,6 +68,7 @@ describe("plugin settings", () => {
       folder: {
         maxDepth: 9,
         contourPadding: -10,
+        separationStrength: 100,
         excluded: ["00_Meta", "/00_Meta/Sources", "/", 42]
       },
       positions: {
@@ -64,6 +82,7 @@ describe("plugin settings", () => {
     expect(settings.graph.colorGroups).toEqual([{ query: "tag:work", color: "#123456" }]);
     expect(settings.folder.maxDepth).toBeNull();
     expect(settings.folder.contourPadding).toBe(DEFAULT_SETTINGS.folder.contourPadding);
+    expect(settings.folder.separationStrength).toBe(DEFAULT_SETTINGS.folder.separationStrength);
     expect(settings.folder.excluded).toEqual(["/00_Meta"]);
     expect(settings.positions).toEqual({ "Good.md": { x: 1, y: 2, fixed: false } });
   });

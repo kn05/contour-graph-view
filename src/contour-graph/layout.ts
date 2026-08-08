@@ -8,6 +8,7 @@ import {
   LAYOUT_SAVE_DELAY
 } from "./constants";
 import { GenGate } from "./generation";
+import { buildFolderShifts, type FolderPoint } from "./separation";
 import type { ContourGraphSettings, Point } from "./types";
 
 export interface LayoutHooks {
@@ -17,6 +18,8 @@ export interface LayoutHooks {
 
 interface LayoutNode extends Point {
   fixed: boolean;
+  folder?: string | null;
+  kind?: string;
 }
 
 export function easeLayoutPoint(current: Point, next: Point): Point {
@@ -81,6 +84,7 @@ export class LayoutRunner<NodeAttrs extends Attributes & LayoutNode, EdgeAttrs e
   private readonly targets = new Map<string, Point>();
   private motionFrame: number | null = null;
   private motionTime: number | null = null;
+  private separationStrength = 0;
   private isSmooth = true;
   private isKilled = false;
 
@@ -103,6 +107,7 @@ export class LayoutRunner<NodeAttrs extends Attributes & LayoutNode, EdgeAttrs e
   start(settings: ContourGraphSettings): void {
     if (this.isKilled || this.graph.order === 0 || this.layout !== null) return;
     const gen = this.gen.next();
+    this.separationStrength = settings.folder.separationStrength;
     this.points.clear();
     this.targets.clear();
     this.graph.forEachNode((id, attrs) => {
@@ -190,10 +195,27 @@ export class LayoutRunner<NodeAttrs extends Attributes & LayoutNode, EdgeAttrs e
       const elapsed = this.motionTime === null ? LAYOUT_OPTS.frameBaseDelay : time - this.motionTime;
       this.motionTime = time;
       const moves = new Map<string, Point>();
+      const folderPoints: FolderPoint[] = [];
+      this.graph.forEachNode((id, attrs) => {
+        const point = this.points.get(id);
+        if (point === undefined || typeof attrs.folder !== "string") return;
+        const isAnchor = attrs.kind === "folder";
+        const isFile = attrs.kind === "file" || attrs.kind === "attachment";
+        if (!isAnchor && !isFile) return;
+        folderPoints.push({ id, folder: attrs.folder, isAnchor, ...point });
+      });
+      const shifts = buildFolderShifts(folderPoints, this.separationStrength);
       for (const [id, current] of this.points) {
         const target = this.targets.get(id);
         if (target === undefined || !this.graph.hasNode(id)) continue;
-        const point = tweenLayoutPoint(current, target, elapsed);
+        const attrs = this.graph.getNodeAttributes(id);
+        const tweened = tweenLayoutPoint(current, target, elapsed);
+        const shift = attrs.fixed || typeof attrs.folder !== "string"
+          ? undefined
+          : shifts.get(attrs.folder);
+        const point = shift === undefined
+          ? tweened
+          : { x: tweened.x + shift.x, y: tweened.y + shift.y };
         if (point.x === current.x && point.y === current.y) continue;
         this.points.set(id, point);
         moves.set(id, point);

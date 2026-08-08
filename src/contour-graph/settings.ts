@@ -129,6 +129,13 @@ function parseFolder(value: unknown, fallback: FolderOpts): FolderOpts {
   return {
     maxDepth,
     clusterStrength: readNum(value, "clusterStrength", fallback.clusterStrength, 0, 2),
+    separationStrength: readNum(
+      value,
+      "separationStrength",
+      fallback.separationStrength,
+      0,
+      1
+    ),
     contourOpacity: readNum(value, "contourOpacity", fallback.contourOpacity, 0, 0.5),
     contourPadding: readNum(value, "contourPadding", fallback.contourPadding, 4, 120),
     minNodes: Math.round(readNum(value, "minNodes", fallback.minNodes, 2, 100)),
@@ -165,9 +172,22 @@ function migrateV1(value: RawMap): RawMap {
   };
 }
 
+function migrateV2(value: RawMap): RawMap {
+  const folder = isMap(value.folder) ? value.folder : {};
+  const separation = typeof folder.separationStrength === "number"
+    ? folder.separationStrength
+    : DEFAULT_SETTINGS.folder.separationStrength;
+  return {
+    ...value,
+    folder: { ...folder, separationStrength: separation },
+    schemaVersion: 3
+  };
+}
+
 const MIGRATIONS: Readonly<Record<number, (value: RawMap) => RawMap>> = {
   0: migrateV0,
-  1: migrateV1
+  1: migrateV1,
+  2: migrateV2
 };
 
 export function migrateSettings(value: unknown): Result<RawMap> {

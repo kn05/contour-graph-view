@@ -24,6 +24,10 @@ Use **Excluded folders** under **Folders and contours** to keep selected folder
 notes and their regular links visible while removing folder attraction and
 contours for the selected folder subtree.
 
+**Folder attraction** controls cohesion inside each direct folder. **Folder
+separation** pushes overlapping, unrelated direct-folder groups apart while
+leaving nested parent/child contours and regular links intact.
+
 ## Development
 
 ```bash

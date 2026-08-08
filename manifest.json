@@ -1,7 +1,7 @@
 {
   "id": "contour-graph-view",
   "name": "Contour Graph View",
-  "version": "0.1.0-beta.7",
+  "version": "0.1.0-beta.8",
   "minAppVersion": "1.8.0",
   "description": "Explore a folder-aware graph with gentle clustering and nested cloud contours.",
   "author": "kn05",

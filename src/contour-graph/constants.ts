@@ -2,7 +2,7 @@ import type { ContourGraphSettings } from "./types";
 
 export const VIEW_TYPE = "contour-graph-view";
 export const VIEW_NAME = "Contour Graph View";
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const ROOT_FOLDER = "/";
 export const FOLDER_PREFIX = "folder:";
 export const TAG_PREFIX = "tag:";
@@ -82,6 +82,12 @@ export const STAGE_OPTS = {
   maxBatch: 192
 } as const;
 
+export const SEPARATION_OPTS = {
+  gap: 6,
+  maxShift: 0.35,
+  maxNeighbors: 32
+} as const;
+
 export const CONTOUR_STYLE = {
   parentAlpha: 0.08,
   childAlpha: 0.92,
@@ -116,6 +122,7 @@ export const DEFAULT_SETTINGS: ContourGraphSettings = {
   folder: {
     maxDepth: null,
     clusterStrength: FOLDER_EDGE_WEIGHT,
+    separationStrength: 0.12,
     contourOpacity: 0.09,
     contourPadding: 24,
     minNodes: 2,

@@ -183,7 +183,22 @@ export class ContourGraphSettingTab extends PluginSettingTab {
           }).open();
         }));
 
-    this.addFolderSlider("Folder attraction", "Gently gather files by their folder.", "clusterStrength", 0, 1, 0.01);
+    this.addFolderSlider(
+      "Folder attraction",
+      "Pull notes toward their direct folder anchor.",
+      "clusterStrength",
+      0,
+      1,
+      0.01
+    );
+    this.addFolderSlider(
+      "Folder separation",
+      "Push overlapping, unrelated direct-folder groups apart.",
+      "separationStrength",
+      0,
+      0.5,
+      0.01
+    );
     this.addFolderSlider("Contour opacity", "Set the resting contour opacity.", "contourOpacity", 0, 0.3, 0.01);
     this.addFolderSlider("Contour padding", "Set the space around folder nodes.", "contourPadding", 4, 80, 1);
     this.addFolderSlider("Minimum files", "Only draw contours with at least this many files.", "minNodes", 2, 20, 1);
@@ -245,7 +260,9 @@ export class ContourGraphSettingTab extends PluginSettingTab {
   private addFolderSlider(
     name: string,
     desc: string,
-    key: keyof Pick<FolderOpts, "clusterStrength" | "contourOpacity" | "contourPadding" | "minNodes">,
+    key: keyof Pick<FolderOpts,
+      "clusterStrength" | "separationStrength" | "contourOpacity" | "contourPadding" | "minNodes"
+    >,
     min: number,
     max: number,
     step: number
