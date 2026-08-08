@@ -48,7 +48,7 @@ function makeSettings(
 }
 
 describe("vault graph model", () => {
-  it("assigns descendants to every visible parent but never creates a root contour", () => {
+  it("assigns each file to exactly one direct-folder region", () => {
     const app = makeApp({
       files: [
         makeFile("Root.md"),
@@ -57,14 +57,14 @@ describe("vault graph model", () => {
         makeFile("Right/Shared/Two.md")
       ]
     });
-    const result = buildGraph(app, makeSettings({}, { maxDepth: 2 }));
+    const result = buildGraph(app, makeSettings());
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const folders = new Map(result.value.folders.map((folder) => [folder.path, folder.nodes]));
-    expect(folders.has("/")).toBe(false);
-    expect(folders.get("/A")).toContain("A/B/C/Deep.md");
-    expect(folders.get("/A/B")).toContain("A/B/C/Deep.md");
-    expect(folders.has("/A/B/C")).toBe(false);
+    const regions = new Map(result.value.regions.map((region) => [region.path, region.nodes]));
+    expect(regions.get("/")).toEqual(["Root.md"]);
+    expect(regions.has("/A")).toBe(false);
+    expect(regions.has("/A/B")).toBe(false);
+    expect(regions.get("/A/B/C")).toEqual(["A/B/C/Deep.md"]);
     expect(result.value.nodes.some((node) => node.id === "folder:/")).toBe(true);
     expect(result.value.nodes.some((node) => node.id === "folder:/A/B/C")).toBe(true);
     expect(result.value.edges).toContainEqual(expect.objectContaining({
@@ -77,8 +77,9 @@ describe("vault graph model", () => {
       target: "A/B/C/Deep.md",
       kind: "folder"
     }));
-    expect(folders.has("/Left/Shared")).toBe(true);
-    expect(folders.has("/Right/Shared")).toBe(true);
+    expect(regions.get("/Left/Shared")).toEqual(["Left/Shared/One.md"]);
+    expect(regions.get("/Right/Shared")).toEqual(["Right/Shared/Two.md"]);
+    expect([...regions.values()].flat()).toHaveLength(4);
   });
 
   it("collects resolved links, unresolved links, tags, and linked attachments", () => {
@@ -121,7 +122,7 @@ describe("vault graph model", () => {
     expect(firstNodes.get("New.md")?.y).toBe(secondNodes.get("New.md")?.y);
   });
 
-  it("keeps excluded-folder notes and links but omits their folder force and contour", () => {
+  it("keeps excluded-folder notes and links but omits their folder structure and region", () => {
     const app = makeApp({
       files: [makeFile("00_Meta/One.md"), makeFile("00_Meta/Sources/Two.md"), makeFile("Keep/Three.md")],
       resolved: { "00_Meta/One.md": { "Keep/Three.md": 1 } }
@@ -139,7 +140,7 @@ describe("vault graph model", () => {
     }));
     expect(result.value.nodes.some((node) => node.id === "folder:/00_Meta")).toBe(false);
     expect(result.value.nodes.find((node) => node.id === "00_Meta/One.md")?.folder).toBeNull();
-    expect(result.value.folders.some((folder) => folder.path.startsWith("/00_Meta"))).toBe(false);
+    expect(result.value.regions.some((folder) => folder.path.startsWith("/00_Meta"))).toBe(false);
   });
 
   it("adds Folders to Graph-style structural nodes and links", () => {

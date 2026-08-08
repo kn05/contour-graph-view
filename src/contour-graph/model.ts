@@ -12,17 +12,16 @@ import {
   fileFolder,
   folderChain,
   folderColor,
-  folderDepth,
   initialPoint,
   isFolderExcluded,
   parentFolder,
-  sortFolders
+  sortRegions
 } from "./folders";
 import { matchQuery, parseQuery } from "./query";
 import type {
   ColorGroup,
   ContourGraphSettings,
-  FolderGroup,
+  FolderRegion,
   GraphEdge,
   GraphModel,
   GraphNode,
@@ -230,7 +229,7 @@ function addFolders(
   edges: Map<string, GraphEdge>,
   settings: ContourGraphSettings,
   isDark: boolean
-): FolderGroup[] {
+): FolderRegion[] {
   const members = new Map<string, Set<string>>();
   const anchors = new Set<string>();
   const files = [...nodes.values()].filter((node) => {
@@ -246,18 +245,13 @@ function addFolders(
   if (files.length > 0) anchors.add(ROOT_FOLDER);
 
   for (const file of files) {
-    const chain = folderChain(file.folder ?? ROOT_FOLDER, null);
+    const chain = folderChain(file.folder ?? ROOT_FOLDER);
     for (const folder of chain) anchors.add(folder);
-    for (const folder of chain) {
-      const isVisible = settings.folder.maxDepth === null || folderDepth(folder) <= settings.folder.maxDepth;
-      if (!isVisible) continue;
-      const set = members.get(folder) ?? new Set<string>();
-      set.add(file.id);
-      members.set(folder, set);
-    }
-
     const direct = chain.at(-1) ?? ROOT_FOLDER;
     anchors.add(direct);
+    const set = members.get(direct) ?? new Set<string>();
+    set.add(file.id);
+    members.set(direct, set);
   }
 
   for (const folder of anchors) {
@@ -286,13 +280,12 @@ function addFolders(
     });
   }
 
-  const groups = [...members].map(([path, ids]) => ({
+  const regions = [...members].map(([path, ids]) => ({
     path,
-    depth: folderDepth(path),
     nodes: [...ids],
     color: folderColor(path, settings.folder.colors, isDark)
   }));
-  return sortFolders(groups);
+  return sortRegions(regions);
 }
 
 function ensureFolderNode(
@@ -386,12 +379,12 @@ export function buildGraph(app: App, settings: ContourGraphSettings): Result<Gra
   addFileLinks(app, nodes, edges, settings);
   addTagNodes(nodes, edges, settings);
   if (!settings.graph.showOrphans) dropOrphans(nodes, edges);
-  const folders = addFolders(nodes, edges, settings, isDark);
+  const regions = addFolders(nodes, edges, settings, isDark);
   scaleNodeSizes(nodes, edges, settings);
 
   return {
     ok: true,
-    value: { nodes: [...nodes.values()], edges: [...edges.values()], folders },
+    value: { nodes: [...nodes.values()], edges: [...edges.values()], regions },
     warnings
   };
 }

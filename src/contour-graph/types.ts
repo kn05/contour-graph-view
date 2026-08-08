@@ -33,10 +33,8 @@ export interface GraphOpts {
 }
 
 export interface FolderOpts {
-  maxDepth: number | null;
-  contourOpacity: number;
-  contourPadding: number;
-  minNodes: number;
+  regionOpacity: number;
+  regionPadding: number;
   excluded: string[];
   colors: Record<string, string>;
 }
@@ -74,9 +72,8 @@ export interface GraphEdge {
   hidden: boolean;
 }
 
-export interface FolderGroup {
+export interface FolderRegion {
   path: string;
-  depth: number;
   nodes: string[];
   color: string;
 }
@@ -84,7 +81,7 @@ export interface FolderGroup {
 export interface GraphModel {
   nodes: GraphNode[];
   edges: GraphEdge[];
-  folders: FolderGroup[];
+  regions: FolderRegion[];
 }
 
 export type Result<T> =

@@ -5,33 +5,24 @@ import type { Attributes } from "graphology-types";
 import type { App } from "obsidian";
 import {
   BASE_EDGE_SIZE,
-  CONTOUR_DRAW_DELAY,
-  CONTOUR_MIN_EDGE_FACTOR,
-  CONTOUR_NODE_DELAY,
-  CONTOUR_SIMPLE_NODE_LIMIT,
   DEFAULT_EDGE_COLOR,
   DEFAULT_LABEL_COLOR,
-  MAX_CONTOUR_DELAY,
+  MAX_REGION_DELAY,
   NODE_COLORS,
+  REGION_DRAW_DELAY,
+  REGION_NODE_DELAY,
+  REGION_STYLE,
   RENDER_OPTS,
   STAGE_OPTS
 } from "./constants";
-import {
-  buildContour,
-  buildCapsuleContour,
-  buildContourPath,
-  contourAlpha,
-  isInside,
-  paintContour,
-  polygonCenter
-} from "./contours";
-import type { ContourNode } from "./contours";
-import { anchorId, expandPoint, folderDepth } from "./folders";
+import { anchorId } from "./folders";
 import { LayoutRunner } from "./layout";
+import { buildRegionCells, buildRegionPath, isInside, regionFrame } from "./regions";
+import type { RegionSeed } from "./regions";
 import { planNodeStage, stageBatchSize } from "./staging";
 import type {
   ContourGraphSettings,
-  FolderGroup,
+  FolderRegion,
   GraphEdge,
   GraphModel,
   GraphNode,
@@ -62,20 +53,11 @@ interface EdgeAttrs extends Attributes {
   type: "line" | "arrow";
 }
 
-interface DrawnContour {
-  folder: FolderGroup;
+interface DrawnRegion {
+  folder: FolderRegion;
   points: Point[];
   center: Point;
   path: Path2D;
-}
-
-interface ContourNodeCache extends ContourNode {
-  expanded: Point[];
-}
-
-interface ContourSeed {
-  nodes: ContourNode[];
-  points: Point[];
 }
 
 export interface RenderHooks {
@@ -95,6 +77,13 @@ function isMouseEvent(event: MouseEvent | TouchEvent): event is MouseEvent {
 function readLabelColor(container: HTMLElement): string {
   const color = window.getComputedStyle(container).color.trim();
   return color.length === 0 ? DEFAULT_LABEL_COLOR : color;
+}
+
+function readRegionBorderColor(container: HTMLElement): string {
+  const color = window.getComputedStyle(container)
+    .getPropertyValue("--background-modifier-border")
+    .trim();
+  return color.length === 0 ? DEFAULT_EDGE_COLOR : color;
 }
 
 function labelThreshold(settings: ContourGraphSettings): number {
@@ -154,12 +143,12 @@ export class GraphRenderer {
   private readonly stageIds: string[];
   private stageIndex = 0;
   private stageTimer: number | null = null;
-  private contourTimer: number | null = null;
-  private contourFrame: number | null = null;
+  private regionTimer: number | null = null;
+  private regionFrame: number | null = null;
   private hoverFrame: number | null = null;
   private hoverPoint: Point | null = null;
-  private contourTime = 0;
-  private contours: DrawnContour[] = [];
+  private regionTime = 0;
+  private regions: DrawnRegion[] = [];
   private activeFolder: string | null = null;
   private activePoint: Point | null = null;
   private dragNode: string | null = null;
@@ -196,15 +185,15 @@ export class GraphRenderer {
       stagePadding: RENDER_OPTS.stagePadding,
       zIndex: false
     });
-    this.canvas = this.sigma.createCanvas("contours", { beforeLayer: "edges" });
+    this.canvas = this.sigma.createCanvas("regions", { beforeLayer: "edges" });
     const ctx = this.canvas.getContext("2d");
-    if (ctx === null) throw new Error("Could not create the contour canvas.");
+    if (ctx === null) throw new Error("Could not create the region canvas.");
     this.ctx = ctx;
     this.label = container.createDiv({ cls: "contour-graph-folder-label" });
     this.label.hidden = true;
     this.bindEvents();
     this.setCamera();
-    this.drawContours();
+    this.drawRegions();
     this.startStage();
     this.layout.start(this.settings);
   }
@@ -235,7 +224,7 @@ export class GraphRenderer {
     this.sigma.setSetting("labelRenderedSizeThreshold", labelThreshold(settings));
     this.sigma.refresh();
     if (didScaleChange) this.setCamera();
-    this.drawContours();
+    this.drawRegions();
     this.layout.start(this.settings);
   }
 
@@ -245,11 +234,11 @@ export class GraphRenderer {
     this.isKilled = true;
     this.clearStage();
     this.layout.kill();
-    if (this.contourTimer !== null) window.clearTimeout(this.contourTimer);
-    if (this.contourFrame !== null) window.cancelAnimationFrame(this.contourFrame);
+    if (this.regionTimer !== null) window.clearTimeout(this.regionTimer);
+    if (this.regionFrame !== null) window.cancelAnimationFrame(this.regionFrame);
     if (this.hoverFrame !== null) window.cancelAnimationFrame(this.hoverFrame);
-    this.contourTimer = null;
-    this.contourFrame = null;
+    this.regionTimer = null;
+    this.regionFrame = null;
     this.hoverFrame = null;
     this.hoverPoint = null;
     this.abort.abort();
@@ -308,7 +297,7 @@ export class GraphRenderer {
   }
 
   private bindEvents(): void {
-    this.sigma.on("afterRender", () => this.scheduleContours());
+    this.sigma.on("afterRender", () => this.scheduleRegions());
     this.sigma.on("enterNode", ({ node }) => this.setNodeFolder(node));
     this.sigma.on("leaveNode", () => this.setActiveFolder(null, null));
     this.sigma.on("clickNode", ({ node, event }) => {
@@ -412,10 +401,9 @@ export class GraphRenderer {
     const point = this.hoverPoint;
     if (point === null || this.dragNode !== null || this.activePoint !== null || this.isKilled) return;
     let folder: string | null = null;
-    for (let index = this.contours.length - 1; index >= 0; index -= 1) {
-      const contour = this.contours[index];
-      if (contour !== undefined && isInside(point, contour.points)) {
-        folder = contour.folder.path;
+    for (const region of this.regions) {
+      if (isInside(point, region.points)) {
+        folder = region.folder.path;
         break;
       }
     }
@@ -446,19 +434,19 @@ export class GraphRenderer {
     if (folder === this.activeFolder && point === this.activePoint) return;
     this.activeFolder = folder;
     this.activePoint = point;
-    this.paintContours();
+    this.paintRegions();
   }
 
-  private scheduleContours(): void {
-    if (this.isKilled || this.contourTimer !== null || this.contourFrame !== null) return;
-    const elapsed = performance.now() - this.contourTime;
-    const interval = Math.min(MAX_CONTOUR_DELAY, CONTOUR_DRAW_DELAY + this.graph.order * CONTOUR_NODE_DELAY);
+  private scheduleRegions(): void {
+    if (this.isKilled || this.regionTimer !== null || this.regionFrame !== null) return;
+    const elapsed = performance.now() - this.regionTime;
+    const interval = Math.min(MAX_REGION_DELAY, REGION_DRAW_DELAY + this.graph.order * REGION_NODE_DELAY);
     const delay = Math.max(0, interval - elapsed);
-    this.contourTimer = window.setTimeout(() => {
-      this.contourTimer = null;
-      this.contourFrame = window.requestAnimationFrame(() => {
-        this.contourFrame = null;
-        this.drawContours();
+    this.regionTimer = window.setTimeout(() => {
+      this.regionTimer = null;
+      this.regionFrame = window.requestAnimationFrame(() => {
+        this.regionFrame = null;
+        this.drawRegions();
       });
     }, delay);
   }
@@ -474,41 +462,53 @@ export class GraphRenderer {
     await leaf.openFile(file, { active: true });
   }
 
-  private drawContours(): void {
+  private drawRegions(): void {
     if (this.isKilled) return;
-    if (this.contourTimer !== null) window.clearTimeout(this.contourTimer);
-    if (this.contourFrame !== null) window.cancelAnimationFrame(this.contourFrame);
-    this.contourTimer = null;
-    this.contourFrame = null;
-    this.contourTime = performance.now();
-    const contours: DrawnContour[] = [];
-    const cache = new Map<string, ContourNodeCache>();
-    const minEdge = this.settings.folder.contourPadding * CONTOUR_MIN_EDGE_FACTOR;
+    if (this.regionTimer !== null) window.clearTimeout(this.regionTimer);
+    if (this.regionFrame !== null) window.cancelAnimationFrame(this.regionFrame);
+    this.regionTimer = null;
+    this.regionFrame = null;
+    this.regionTime = performance.now();
 
-    for (const folder of this.model.folders) {
-      if (folder.nodes.length < this.settings.folder.minNodes) continue;
-      try {
-        const seed = this.contourSeed(folder, cache);
-        if (seed.nodes.length < this.settings.folder.minNodes) continue;
-        const polygon = seed.nodes.length <= CONTOUR_SIMPLE_NODE_LIMIT
-          ? buildCapsuleContour(seed.nodes)
-          : buildContour(seed.points, minEdge);
-        if (polygon.length < 3) continue;
-        contours.push({
-          folder,
-          points: polygon,
-          center: polygonCenter(polygon),
-          path: buildContourPath(polygon)
-        });
-      } catch {
-        continue;
+    const allPoints: Point[] = [];
+    this.graph.forEachNode((_id, attrs) => {
+      allPoints.push(this.sigma.graphToViewport({ x: attrs.x, y: attrs.y }));
+    });
+    const seeds: RegionSeed[] = [];
+    for (const folder of this.model.regions) {
+      const memberPoints: Point[] = [];
+      for (const id of folder.nodes) {
+        if (!this.graph.hasNode(id)) continue;
+        const attrs = this.graph.getNodeAttributes(id);
+        memberPoints.push(this.sigma.graphToViewport({ x: attrs.x, y: attrs.y }));
       }
+      const anchor = this.viewportPoint(anchorId(folder.path));
+      const position = this.seedPosition(memberPoints, anchor);
+      if (position === null) continue;
+      seeds.push({ path: folder.path, position, weight: Math.max(1, folder.nodes.length) });
     }
-    this.contours = contours;
-    this.paintContours();
+
+    const frame = regionFrame(allPoints, this.settings.folder.regionPadding);
+    if (frame === null || seeds.length === 0) {
+      this.regions = [];
+      this.paintRegions();
+      return;
+    }
+    const folders = new Map(this.model.regions.map((folder) => [folder.path, folder]));
+    this.regions = buildRegionCells(seeds, frame).flatMap((cell): DrawnRegion[] => {
+      const folder = folders.get(cell.path);
+      if (folder === undefined) return [];
+      return [{
+        folder,
+        points: cell.points,
+        center: cell.center,
+        path: buildRegionPath(cell.points)
+      }];
+    });
+    this.paintRegions();
   }
 
-  private paintContours(): void {
+  private paintRegions(): void {
     if (this.isKilled) return;
     const size = this.sigma.getDimensions();
     const ratio = window.devicePixelRatio || 1;
@@ -522,37 +522,49 @@ export class GraphRenderer {
     }
     this.ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     this.ctx.clearRect(0, 0, size.width, size.height);
-    const maxDepth = Math.max(1, ...this.model.folders.map((folder) => folder.depth));
-    for (const contour of this.contours) {
-      const isActive = contour.folder.path === this.activeFolder;
-      const alpha = contourAlpha(contour.folder.depth, maxDepth, this.settings.folder.contourOpacity);
-      paintContour(this.ctx, contour.path, contour.folder.color, alpha, isActive);
+    for (const region of this.regions) {
+      const isActive = region.folder.path === this.activeFolder;
+      const multiplier = isActive ? REGION_STYLE.activeFill : 1;
+      this.ctx.globalAlpha = Math.min(
+        REGION_STYLE.maxAlpha,
+        this.settings.folder.regionOpacity * multiplier
+      );
+      this.ctx.fillStyle = region.folder.color;
+      this.ctx.fill(region.path);
     }
+    const borderColor = readRegionBorderColor(this.container);
+    for (const region of this.regions) {
+      const isActive = region.folder.path === this.activeFolder;
+      this.ctx.globalAlpha = isActive ? REGION_STYLE.activeBorderAlpha : REGION_STYLE.borderAlpha;
+      this.ctx.strokeStyle = isActive ? region.folder.color : borderColor;
+      this.ctx.lineWidth = isActive ? REGION_STYLE.activeWidth : REGION_STYLE.idleWidth;
+      this.ctx.stroke(region.path);
+    }
+    this.ctx.globalAlpha = 1;
     this.drawLabel();
   }
 
-  private contourSeed(folder: FolderGroup, cache: Map<string, ContourNodeCache>): ContourSeed {
-    const nodes: ContourNode[] = [];
-    const points: Point[] = [];
-    for (const id of [anchorId(folder.path), ...folder.nodes]) {
-      const cached = cache.get(id);
-      if (cached !== undefined) {
-        nodes.push(cached);
-        points.push(...cached.expanded);
-        continue;
-      }
-      if (!this.graph.hasNode(id)) continue;
-      const attrs = this.graph.getNodeAttributes(id);
-      if (attrs.hidden) continue;
-      const point = this.sigma.graphToViewport({ x: attrs.x, y: attrs.y });
-      const radius = this.settings.folder.contourPadding + attrs.size;
-      const expanded = expandPoint(point, radius);
-      const node = { point, radius, expanded };
-      cache.set(id, node);
-      nodes.push(node);
-      points.push(...expanded);
+  private viewportPoint(id: string): Point | null {
+    if (!this.graph.hasNode(id)) return null;
+    const attrs = this.graph.getNodeAttributes(id);
+    return this.sigma.graphToViewport({ x: attrs.x, y: attrs.y });
+  }
+
+  private seedPosition(points: readonly Point[], anchor: Point | null): Point | null {
+    if (points.length === 0) return anchor;
+    let x = 0;
+    let y = 0;
+    for (const point of points) {
+      x += point.x;
+      y += point.y;
     }
-    return { nodes, points };
+    const divisor = points.length;
+    const center = { x: x / divisor, y: y / divisor };
+    if (anchor === null) return center;
+    return {
+      x: center.x * 0.75 + anchor.x * 0.25,
+      y: center.y * 0.75 + anchor.y * 0.25
+    };
   }
 
   private drawLabel(): void {
@@ -560,11 +572,8 @@ export class GraphRenderer {
       this.label.hidden = true;
       return;
     }
-    const depth = folderDepth(this.activeFolder);
-    const contour = this.contours.find((entry) => {
-      return entry.folder.path === this.activeFolder && entry.folder.depth === depth;
-    });
-    const point = this.activePoint ?? contour?.center;
+    const region = this.regions.find((entry) => entry.folder.path === this.activeFolder);
+    const point = this.activePoint ?? region?.center;
     if (point === undefined) {
       this.label.hidden = true;
       return;

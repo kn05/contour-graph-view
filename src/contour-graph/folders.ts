@@ -1,9 +1,5 @@
-import {
-  CONTOUR_POINTS,
-  FOLDER_PREFIX,
-  ROOT_FOLDER
-} from "./constants";
-import type { FolderGroup, Point } from "./types";
+import { FOLDER_PREFIX, ROOT_FOLDER } from "./constants";
+import type { FolderRegion, Point } from "./types";
 
 export function normalizeFolder(path: string): string {
   const parts = path.split("/").filter((part) => part.length > 0);
@@ -55,13 +51,12 @@ export function compactFolders(paths: readonly string[]): string[] {
   });
 }
 
-export function folderChain(path: string, maxDepth: number | null): string[] {
+export function folderChain(path: string): string[] {
   const folder = normalizeFolder(path);
   if (folder === ROOT_FOLDER) return [];
   const parts = folder.slice(1).split("/");
-  const limit = maxDepth === null ? parts.length : Math.min(maxDepth, parts.length);
   const chain: string[] = [];
-  for (let depth = 1; depth <= limit; depth += 1) {
+  for (let depth = 1; depth <= parts.length; depth += 1) {
     chain.push(`/${parts.slice(0, depth).join("/")}`);
   }
   return chain;
@@ -96,21 +91,6 @@ export function folderColor(path: string, custom: Record<string, string>, isDark
   return `hsl(${hue} 66% ${lightness}%)`;
 }
 
-export function sortFolders(groups: readonly FolderGroup[]): FolderGroup[] {
-  return [...groups].sort((left, right) => {
-    if (left.depth !== right.depth) return left.depth - right.depth;
-    return left.path.localeCompare(right.path);
-  });
-}
-
-export function expandPoint(point: Point, radius: number): Point[] {
-  const points: Point[] = [];
-  for (let index = 0; index < CONTOUR_POINTS; index += 1) {
-    const angle = index * Math.PI * 2 / CONTOUR_POINTS;
-    points.push({
-      x: point.x + Math.cos(angle) * radius,
-      y: point.y + Math.sin(angle) * radius
-    });
-  }
-  return points;
+export function sortRegions(regions: readonly FolderRegion[]): FolderRegion[] {
+  return [...regions].sort((left, right) => left.path.localeCompare(right.path));
 }

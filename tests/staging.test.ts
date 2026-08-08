@@ -43,7 +43,7 @@ describe("progressive graph staging", () => {
         makeEdge("N5", "N6"),
         makeEdge("N2", "N4")
       ],
-      folders: []
+      regions: []
     };
     const ids = planNodeStage(model);
     expect(ids[0]).toBe("N5");
@@ -54,7 +54,7 @@ describe("progressive graph staging", () => {
     const model: GraphModel = {
       nodes: [makeNode("A"), makeNode("B")],
       edges: [],
-      folders: []
+      regions: []
     };
     expect(planNodeStage(model)).toEqual([]);
     expect(stageBatchSize(0)).toBe(0);

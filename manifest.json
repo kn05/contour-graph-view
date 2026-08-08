@@ -1,9 +1,9 @@
 {
   "id": "contour-graph-view",
   "name": "Contour Graph View",
-  "version": "0.1.0-beta.11",
+  "version": "0.1.0-beta.12",
   "minAppVersion": "1.8.0",
-  "description": "Explore links and visible folder hierarchies with nested cloud contours.",
+  "description": "Explore links and folder hierarchies in non-overlapping circular regions.",
   "author": "kn05",
   "isDesktopOnly": true
 }

@@ -2,7 +2,7 @@ import type { ContourGraphSettings } from "./types";
 
 export const VIEW_TYPE = "contour-graph-view";
 export const VIEW_NAME = "Contour Graph View";
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 export const ROOT_FOLDER = "/";
 export const FOLDER_PREFIX = "folder:";
 export const TAG_PREFIX = "tag:";
@@ -11,9 +11,9 @@ export const EVENT_DELAY = 180;
 export const SAVE_DELAY = 600;
 export const LAYOUT_SAVE_DELAY = 1_000;
 export const LAYOUT_RUN_TIME = 8_000;
-export const CONTOUR_DRAW_DELAY = 48;
-export const CONTOUR_NODE_DELAY = 0.025;
-export const MAX_CONTOUR_DELAY = 180;
+export const REGION_DRAW_DELAY = 160;
+export const REGION_NODE_DELAY = 0.04;
+export const MAX_REGION_DELAY = 520;
 export const MAX_POSITIONS = 12_000;
 export const MAX_QUERY_LENGTH = 4_096;
 export const MAX_QUERY_TOKENS = 512;
@@ -28,15 +28,14 @@ export const NODE_SIZE_OPTS = {
   folderFactor: 1.12,
   mutedFactor: 0.82
 } as const;
-export const CONTOUR_POINTS = 6;
-export const CONTOUR_CAPSULE_POINTS = 32;
-export const CONTOUR_SIMPLE_NODE_LIMIT = 2;
-export const CONTOUR_CONCAVITY = 1.6;
-export const CONTOUR_MIN_EDGE_FACTOR = 0.2;
-export const CONTOUR_SMOOTH_STEPS = 2;
-export const MAX_CONTOUR_VERTICES = 2_048;
-export const MIN_CONTOUR_ALPHA = 0;
-export const MAX_CONTOUR_ALPHA = 0.16;
+export const REGION_OPTS = {
+  circlePoints: 64,
+  convergenceRatio: 0.035,
+  maxIterations: 18,
+  minWeightRatio: 0.015,
+  minRadius: 56,
+  siteJitter: 0.01
+} as const;
 export const DEFAULT_EDGE_COLOR = "#7f8796";
 export const DEFAULT_LABEL_COLOR = "#d7dce5";
 export const NODE_COLORS = {
@@ -87,16 +86,13 @@ export const STAGE_OPTS = {
   maxBatch: 192
 } as const;
 
-export const CONTOUR_STYLE = {
-  parentAlpha: 0.035,
-  childAlpha: 0.965,
-  depthPower: 2.1,
-  activeFill: 2.2,
-  activeStroke: 0.72,
-  strokeAlpha: 0.34,
-  strokeFactor: 2.4,
-  activeWidth: 2,
-  idleWidth: 1
+export const REGION_STYLE = {
+  maxAlpha: 0.18,
+  activeFill: 1.8,
+  borderAlpha: 0.34,
+  activeBorderAlpha: 0.8,
+  activeWidth: 1.5,
+  idleWidth: 0.75
 } as const;
 
 export const DEFAULT_SETTINGS: ContourGraphSettings = {
@@ -119,10 +115,8 @@ export const DEFAULT_SETTINGS: ContourGraphSettings = {
     colorGroups: []
   },
   folder: {
-    maxDepth: null,
-    contourOpacity: 0.055,
-    contourPadding: 14,
-    minNodes: 2,
+    regionOpacity: 0.065,
+    regionPadding: 18,
     excluded: [],
     colors: {}
   },

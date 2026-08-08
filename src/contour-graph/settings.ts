@@ -122,15 +122,9 @@ function parseExcluded(value: unknown, fallback: readonly string[]): string[] {
 
 function parseFolder(value: unknown, fallback: FolderOpts): FolderOpts {
   if (!isMap(value)) return structuredClone(fallback);
-  const rawDepth = value.maxDepth;
-  const hasDepth = typeof rawDepth === "number" && Number.isInteger(rawDepth)
-    && rawDepth >= 1 && rawDepth <= 4;
-  const maxDepth = hasDepth ? rawDepth : fallback.maxDepth;
   return {
-    maxDepth,
-    contourOpacity: readNum(value, "contourOpacity", fallback.contourOpacity, 0, 0.5),
-    contourPadding: readNum(value, "contourPadding", fallback.contourPadding, 4, 120),
-    minNodes: Math.round(readNum(value, "minNodes", fallback.minNodes, 2, 100)),
+    regionOpacity: readNum(value, "regionOpacity", fallback.regionOpacity, 0, 0.5),
+    regionPadding: readNum(value, "regionPadding", fallback.regionPadding, 4, 120),
     excluded: parseExcluded(value.excluded, fallback.excluded),
     colors: parseColors(value.colors)
   };
@@ -172,8 +166,8 @@ function migrateV3(value: RawMap): RawMap {
   const folder = isMap(value.folder) ? { ...value.folder } : {};
   delete folder.clusterStrength;
   delete folder.separationStrength;
-  if (folder.contourOpacity === 0.09) folder.contourOpacity = DEFAULT_SETTINGS.folder.contourOpacity;
-  if (folder.contourPadding === 24) folder.contourPadding = DEFAULT_SETTINGS.folder.contourPadding;
+  if (folder.contourOpacity === 0.09) folder.contourOpacity = 0.055;
+  if (folder.contourPadding === 24) folder.contourPadding = 14;
   const positions = isMap(value.positions)
     ? Object.fromEntries(Object.entries(value.positions).filter(([, point]) => {
       return isMap(point) && point.fixed === true;
@@ -182,11 +176,27 @@ function migrateV3(value: RawMap): RawMap {
   return { ...value, folder, positions, schemaVersion: 4 };
 }
 
+function migrateV4(value: RawMap): RawMap {
+  const folder = isMap(value.folder) ? { ...value.folder } : {};
+  const oldOpacity = typeof folder.contourOpacity === "number" ? folder.contourOpacity : null;
+  const oldPadding = typeof folder.contourPadding === "number" ? folder.contourPadding : null;
+  folder.regionOpacity = oldOpacity ?? DEFAULT_SETTINGS.folder.regionOpacity;
+  folder.regionPadding = oldPadding ?? DEFAULT_SETTINGS.folder.regionPadding;
+  if (oldOpacity === 0.055) folder.regionOpacity = DEFAULT_SETTINGS.folder.regionOpacity;
+  if (oldPadding === 14) folder.regionPadding = DEFAULT_SETTINGS.folder.regionPadding;
+  delete folder.maxDepth;
+  delete folder.contourOpacity;
+  delete folder.contourPadding;
+  delete folder.minNodes;
+  return { ...value, folder, schemaVersion: 5 };
+}
+
 const MIGRATIONS: Readonly<Record<number, (value: RawMap) => RawMap>> = {
   0: migrateV0,
   1: migrateV1,
   2: migrateV2,
-  3: migrateV3
+  3: migrateV3,
+  4: migrateV4
 };
 
 export function migrateSettings(value: unknown): Result<RawMap> {

@@ -17,7 +17,7 @@ export class FolderPicker extends Modal {
     this.setTitle("Excluded folders");
     this.modalEl.addClass("contour-graph-folder-modal");
     this.contentEl.createEl("p", {
-      text: "Selected folders and all their descendants stay in the graph, but receive no folder attraction or contour."
+      text: "Selected folders and all their descendants stay in the graph, but receive no folder nodes, links, or regions."
     });
     const search = this.contentEl.createEl("input", {
       cls: "contour-graph-folder-search",

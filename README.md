@@ -2,8 +2,8 @@
 
 Contour Graph View is a desktop-only Obsidian plugin that renders a separate,
 folder-aware global graph. It keeps the link-driven graph, adds visible folder
-nodes and hierarchy links in the style of Folders to Graph, then draws nested
-contours as a passive visual layer around each folder's notes.
+nodes and hierarchy links in the style of Folders to Graph, then partitions one
+circular map into mutually exclusive, file-count-weighted folder regions.
 
 ## Beta installation with BRAT
 
@@ -21,13 +21,15 @@ load, supported values from the core Global Graph settings become this
 plugin's defaults. Later changes are stored independently. Use **Import from
 Graph settings** in the plugin settings to import again.
 
-Use **Excluded folders** under **Folders and contours** to keep selected folder
+Use **Excluded folders** under **Folders and regions** to keep selected folder
 notes and their regular links visible while removing folder nodes, structural
-links, and contours for the selected folder subtree.
+links, and regions for the selected folder subtree.
 
 Folder nodes connect to their direct files and child folders through ordinary
-graph links. The contour layer never applies layout forces, so the visible
-graph structure—not the colored regions—determines where nodes settle.
+graph links. The region layer never applies layout forces, so the visible
+graph structure—not the colored regions—determines where nodes settle. Each
+file belongs to exactly one direct-folder region; parent folders no longer add
+overlapping translucent layers.
 
 ## Development
 

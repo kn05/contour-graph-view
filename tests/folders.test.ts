@@ -26,10 +26,9 @@ describe("folder paths", () => {
     expect(folderDepth("/Work/Active")).toBe(2);
   });
 
-  it("builds all ancestors and applies only the requested visible depth", () => {
-    expect(folderChain("/A/B/C", null)).toEqual(["/A", "/A/B", "/A/B/C"]);
-    expect(folderChain("/A/B/C", 2)).toEqual(["/A", "/A/B"]);
-    expect(folderChain("/", null)).toEqual([]);
+  it("builds every folder ancestor", () => {
+    expect(folderChain("/A/B/C")).toEqual(["/A", "/A/B", "/A/B/C"]);
+    expect(folderChain("/")).toEqual([]);
   });
 
   it("excludes selected folder subtrees and removes redundant descendants", () => {
@@ -57,7 +56,7 @@ describe("folder paths", () => {
       const parts = Array.from({ length: index % 9 }, (_, part) => `p${index}-${part}`);
       const path = `${index % 2 === 0 ? "/" : ""}${parts.join("//")}`;
       const folder = normalizeFolder(path);
-      expect(() => folderChain(folder, index % 5 || null)).not.toThrow();
+      expect(() => folderChain(folder)).not.toThrow();
     }
   });
 });

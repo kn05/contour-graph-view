@@ -60,7 +60,7 @@ function colorText(colors: Record<string, string>): string {
 }
 
 function excludedText(folders: readonly string[]): string {
-  if (folders.length === 0) return "No folders are excluded from folder nodes, links, and contours.";
+  if (folders.length === 0) return "No folders are excluded from folder nodes, links, and regions.";
   const shown = folders.slice(0, 3).join(", ");
   const extra = folders.length > 3 ? ` and ${folders.length - 3} more` : "";
   return `Excluded: ${shown}${extra}. Notes and regular links remain visible.`;
@@ -160,14 +160,7 @@ export class ContourGraphSettingTab extends PluginSettingTab {
   }
 
   private addFolderSettings(): void {
-    this.containerEl.createEl("h3", { text: "Folders and contours" });
-    new Setting(this.containerEl)
-      .setName("Maximum folder depth")
-      .setDesc("Draw parent and child contours together up to this depth.")
-      .addDropdown((dropdown) => dropdown
-        .addOptions({ all: "All", "1": "1", "2": "2", "3": "3", "4": "4" })
-        .setValue(this.host.getSettings().folder.maxDepth?.toString() ?? "all")
-        .onChange((value) => this.updateFolder({ maxDepth: value === "all" ? null : Number(value) })));
+    this.containerEl.createEl("h3", { text: "Folders and regions" });
 
     const excluded = this.host.getSettings().folder.excluded;
     new Setting(this.containerEl)
@@ -183,9 +176,22 @@ export class ContourGraphSettingTab extends PluginSettingTab {
           }).open();
         }));
 
-    this.addFolderSlider("Contour opacity", "Set the resting contour opacity.", "contourOpacity", 0, 0.3, 0.01);
-    this.addFolderSlider("Contour padding", "Set the space around folder nodes.", "contourPadding", 4, 80, 1);
-    this.addFolderSlider("Minimum files", "Only draw contours with at least this many files.", "minNodes", 2, 20, 1);
+    this.addFolderSlider(
+      "Region opacity",
+      "Set the fill opacity for non-overlapping folder regions.",
+      "regionOpacity",
+      0,
+      0.3,
+      0.01
+    );
+    this.addFolderSlider(
+      "Outer circle padding",
+      "Set the space between graph nodes and the circular map boundary.",
+      "regionPadding",
+      4,
+      80,
+      1
+    );
 
     let draft = colorText(this.host.getSettings().folder.colors);
     new Setting(this.containerEl)
@@ -245,7 +251,7 @@ export class ContourGraphSettingTab extends PluginSettingTab {
     name: string,
     desc: string,
     key: keyof Pick<FolderOpts,
-      "contourOpacity" | "contourPadding" | "minNodes"
+      "regionOpacity" | "regionPadding"
     >,
     min: number,
     max: number,

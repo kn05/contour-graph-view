@@ -33,8 +33,9 @@ describe("plugin settings", () => {
     expect(migrated.value).toEqual(expect.objectContaining({
       schemaVersion: SCHEMA_VERSION,
       folder: {
-        contourPadding: 30,
-        excluded: []
+        excluded: [],
+        regionOpacity: DEFAULT_SETTINGS.folder.regionOpacity,
+        regionPadding: 30
       }
     }));
   });
@@ -46,7 +47,9 @@ describe("plugin settings", () => {
     expect(migrated.value).toEqual(expect.objectContaining({
       schemaVersion: SCHEMA_VERSION,
       folder: {
-        excluded: ["/Meta"]
+        excluded: ["/Meta"],
+        regionOpacity: DEFAULT_SETTINGS.folder.regionOpacity,
+        regionPadding: DEFAULT_SETTINGS.folder.regionPadding
       }
     }));
   });
@@ -78,13 +81,13 @@ describe("plugin settings", () => {
     expect(settings.graph.lineSize).toBe(DEFAULT_SETTINGS.graph.lineSize);
     expect(settings.graph.repelStrength).toBe(DEFAULT_SETTINGS.graph.repelStrength);
     expect(settings.graph.colorGroups).toEqual([{ query: "tag:work", color: "#123456" }]);
-    expect(settings.folder.maxDepth).toBeNull();
-    expect(settings.folder.contourPadding).toBe(DEFAULT_SETTINGS.folder.contourPadding);
+    expect(settings.folder.regionOpacity).toBe(DEFAULT_SETTINGS.folder.regionOpacity);
+    expect(settings.folder.regionPadding).toBe(DEFAULT_SETTINGS.folder.regionPadding);
     expect(settings.folder.excluded).toEqual(["/00_Meta"]);
     expect(settings.positions).toEqual({});
   });
 
-  it("migrates the old force layout to passive contours and keeps only pinned positions", () => {
+  it("migrates the old force layout to passive regions and keeps only pinned positions", () => {
     const migrated = migrateSettings({
       schemaVersion: 3,
       folder: {
@@ -101,11 +104,29 @@ describe("plugin settings", () => {
     expect(migrated.ok).toBe(true);
     if (!migrated.ok) return;
     expect(migrated.value.folder).toEqual({
-      contourOpacity: DEFAULT_SETTINGS.folder.contourOpacity,
-      contourPadding: DEFAULT_SETTINGS.folder.contourPadding
+      regionOpacity: DEFAULT_SETTINGS.folder.regionOpacity,
+      regionPadding: DEFAULT_SETTINGS.folder.regionPadding
     });
     expect(migrated.value.positions).toEqual({
       "Pinned.md": { x: 3, y: 4, fixed: true }
+    });
+  });
+
+  it("keeps customized contour values when migrating them to regions", () => {
+    const migrated = migrateSettings({
+      schemaVersion: 4,
+      folder: {
+        maxDepth: 3,
+        minNodes: 2,
+        contourOpacity: 0.12,
+        contourPadding: 30
+      }
+    });
+    expect(migrated.ok).toBe(true);
+    if (!migrated.ok) return;
+    expect(migrated.value.folder).toEqual({
+      regionOpacity: 0.12,
+      regionPadding: 30
     });
   });
 
