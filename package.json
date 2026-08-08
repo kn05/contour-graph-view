@@ -1,0 +1,42 @@
+{
+  "name": "contour-graph-view",
+  "version": "0.1.0-beta.1",
+  "description": "A folder-aware contour graph view for Obsidian.",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "npm run typecheck && node esbuild.config.mjs production",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "check": "npm run lint && npm run typecheck && npm run test:run && npm run build"
+  },
+  "keywords": [
+    "obsidian",
+    "graph",
+    "contour",
+    "folders"
+  ],
+  "author": "kn05",
+  "license": "MIT",
+  "dependencies": {
+    "concaveman": "2.0.0",
+    "graphology": "0.26.0",
+    "graphology-layout-forceatlas2": "0.10.1",
+    "sigma": "3.0.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/concaveman": "1.1.6",
+    "@types/node": "26.2.0",
+    "eslint": "10.8.1",
+    "esbuild": "0.28.1",
+    "globals": "17.9.0",
+    "obsidian": "1.13.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.66.0",
+    "vitest": "4.1.10"
+  }
+}
