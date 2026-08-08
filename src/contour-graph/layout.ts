@@ -1,4 +1,5 @@
 import FA2Layout from "graphology-layout-forceatlas2/worker";
+import type { ForceAtlas2Settings } from "graphology-layout-forceatlas2";
 import type Graph from "graphology-types";
 import type { Attributes } from "graphology-types";
 import {
@@ -12,6 +13,33 @@ import type { ContourGraphSettings } from "./types";
 export interface LayoutHooks {
   save: () => void;
   showError: (message: string) => void;
+}
+
+export function mapLayoutOpts(settings: ContourGraphSettings, order: number): ForceAtlas2Settings {
+  const repel = settings.graph.repelStrength / LAYOUT_OPTS.repelBase;
+  const distance = Math.sqrt(settings.graph.linkDistance / LAYOUT_OPTS.distanceBase);
+  const rawScale = repel * distance;
+  const scalingRatio = Math.min(
+    LAYOUT_OPTS.scaleCeiling,
+    Math.max(LAYOUT_OPTS.scaleFloor, rawScale)
+  );
+  const slowDown = Math.max(
+    LAYOUT_OPTS.slowDownFloor,
+    LAYOUT_OPTS.slowDownBase / Math.max(LAYOUT_OPTS.linkStrengthFloor, settings.graph.linkStrength)
+  );
+  return {
+    adjustSizes: false,
+    barnesHutOptimize: order > LAYOUT_OPTS.barnesHutMinNodes,
+    barnesHutTheta: LAYOUT_OPTS.barnesHutTheta,
+    edgeWeightInfluence: LAYOUT_OPTS.edgeWeightInfluence,
+    gravity: Math.max(
+      LAYOUT_OPTS.gravityFloor,
+      settings.graph.centerStrength * LAYOUT_OPTS.gravityFactor
+    ),
+    scalingRatio,
+    slowDown,
+    strongGravityMode: true
+  };
 }
 
 export class LayoutRunner<NodeAttrs extends Attributes, EdgeAttrs extends Attributes> {
@@ -30,25 +58,13 @@ export class LayoutRunner<NodeAttrs extends Attributes, EdgeAttrs extends Attrib
     if (this.isKilled || this.graph.order === 0 || this.layout !== null) return;
     const gen = this.gen.next();
     try {
-      const scale = settings.graph.repelStrength * settings.graph.linkDistance / LAYOUT_OPTS.distanceBase;
       this.layout = new FA2Layout<NodeAttrs, EdgeAttrs>(this.graph, {
         getEdgeWeight: "weight",
         outputReducer: (id: string, attrs: NodeAttrs): NodeAttrs => {
           if (this.gen.isCurrent(gen) || !this.graph.hasNode(id)) return attrs;
           return this.graph.getNodeAttributes(id);
         },
-        settings: {
-          adjustSizes: true,
-          barnesHutOptimize: this.graph.order > LAYOUT_OPTS.barnesHutMinNodes,
-          barnesHutTheta: LAYOUT_OPTS.barnesHutTheta,
-          edgeWeightInfluence: LAYOUT_OPTS.edgeWeightInfluence,
-          gravity: Math.max(LAYOUT_OPTS.gravityFloor, settings.graph.centerStrength * LAYOUT_OPTS.gravityFactor),
-          scalingRatio: Math.max(LAYOUT_OPTS.scaleFloor, scale),
-          slowDown: Math.max(
-            LAYOUT_OPTS.slowDownFloor,
-            LAYOUT_OPTS.slowDownBase / Math.max(LAYOUT_OPTS.linkStrengthFloor, settings.graph.linkStrength)
-          )
-        }
+        settings: mapLayoutOpts(settings, this.graph.order)
       });
       this.layout.start();
       this.saveTimer = window.setInterval(() => {

@@ -11,17 +11,20 @@ export const EVENT_DELAY = 180;
 export const SAVE_DELAY = 600;
 export const LAYOUT_SAVE_DELAY = 1_000;
 export const LAYOUT_RUN_TIME = 8_000;
-export const CONTOUR_DRAW_DELAY = 90;
-export const CONTOUR_NODE_DELAY = 0.07;
-export const MAX_CONTOUR_DELAY = 450;
+export const CONTOUR_DRAW_DELAY = 48;
+export const CONTOUR_NODE_DELAY = 0.025;
+export const MAX_CONTOUR_DELAY = 180;
 export const MAX_POSITIONS = 12_000;
 export const MAX_QUERY_LENGTH = 4_096;
 export const MAX_QUERY_TOKENS = 512;
 export const BASE_NODE_SIZE = 4;
 export const FOLDER_EDGE_WEIGHT = 0.18;
 export const PARENT_EDGE_FACTOR = 0.5;
-export const CONTOUR_POINTS = 8;
-export const CONTOUR_CONCAVITY = 2;
+export const CONTOUR_POINTS = 6;
+export const CONTOUR_CONCAVITY = 6;
+export const CONTOUR_MIN_EDGE_FACTOR = 0.55;
+export const CONTOUR_SMOOTH_STEPS = 2;
+export const MAX_CONTOUR_VERTICES = 2_048;
 export const MIN_CONTOUR_ALPHA = 0.025;
 export const MAX_CONTOUR_ALPHA = 0.2;
 export const DEFAULT_EDGE_COLOR = "#7f8796";
@@ -33,13 +36,15 @@ export const NODE_COLORS = {
 } as const;
 
 export const LAYOUT_OPTS = {
+  repelBase: 10,
   distanceBase: 250,
-  barnesHutMinNodes: 500,
+  barnesHutMinNodes: 150,
   barnesHutTheta: 0.6,
   edgeWeightInfluence: 1,
-  gravityFloor: 0.01,
-  gravityFactor: 2,
-  scaleFloor: 0.1,
+  gravityFloor: 0.1,
+  gravityFactor: 1.9,
+  scaleFloor: 0.15,
+  scaleCeiling: 12,
   slowDownFloor: 1,
   slowDownBase: 4,
   linkStrengthFloor: 0.1

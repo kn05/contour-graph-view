@@ -8,8 +8,9 @@ describe("folder contours", () => {
       ...expandPoint({ x: 0, y: 0 }, 5),
       ...expandPoint({ x: 20, y: 0 }, 5)
     ];
-    const polygon = buildContour(points);
+    const polygon = buildContour(points, 3);
     expect(polygon.length).toBeGreaterThanOrEqual(3);
+    expect(polygon.length).toBeGreaterThan(6);
     expect(isInside({ x: 0, y: 0 }, polygon)).toBe(true);
     expect(isInside({ x: 20, y: 0 }, polygon)).toBe(true);
     expect(isInside({ x: 100, y: 100 }, polygon)).toBe(false);

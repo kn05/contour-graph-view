@@ -1,7 +1,7 @@
 import { DirectedGraph } from "graphology";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../src/contour-graph/constants";
-import { LayoutRunner } from "../src/contour-graph/layout";
+import { LayoutRunner, mapLayoutOpts } from "../src/contour-graph/layout";
 
 interface NodeAttrs {
   x: number;
@@ -97,5 +97,22 @@ describe("layout worker lifecycle", () => {
     expect(reducer("A", { x: 99, y: 99, size: 4, fixed: false })).toEqual(
       graph.getNodeAttributes("A")
     );
+  });
+
+  it("normalizes Core Graph forces to ForceAtlas2 ranges", () => {
+    const base = mapLayoutOpts(DEFAULT_SETTINGS, 100);
+    const spread = structuredClone(DEFAULT_SETTINGS);
+    spread.graph.repelStrength *= 2;
+    spread.graph.linkDistance *= 2;
+    spread.graph.centerStrength *= 1.5;
+    const stronger = mapLayoutOpts(spread, 1_000);
+
+    expect(base.scalingRatio).toBeCloseTo(1);
+    expect(base.strongGravityMode).toBe(true);
+    expect(base.adjustSizes).toBe(false);
+    expect(base.barnesHutOptimize).toBe(false);
+    expect(stronger.scalingRatio).toBeGreaterThan(base.scalingRatio ?? 0);
+    expect(stronger.gravity).toBeGreaterThan(base.gravity ?? 0);
+    expect(stronger.barnesHutOptimize).toBe(true);
   });
 });

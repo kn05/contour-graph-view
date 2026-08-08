@@ -5,6 +5,7 @@ import type { Attributes } from "graphology-types";
 import type { App } from "obsidian";
 import {
   CONTOUR_DRAW_DELAY,
+  CONTOUR_MIN_EDGE_FACTOR,
   CONTOUR_NODE_DELAY,
   DEFAULT_EDGE_COLOR,
   DEFAULT_LABEL_COLOR,
@@ -12,7 +13,14 @@ import {
   NODE_COLORS,
   RENDER_OPTS
 } from "./constants";
-import { buildContour, contourAlpha, isInside, paintContour, polygonCenter } from "./contours";
+import {
+  buildContour,
+  buildContourPath,
+  contourAlpha,
+  isInside,
+  paintContour,
+  polygonCenter
+} from "./contours";
 import { expandPoint, folderDepth } from "./folders";
 import { LayoutRunner } from "./layout";
 import type {
@@ -52,6 +60,7 @@ interface DrawnContour {
   folder: FolderGroup;
   points: Point[];
   center: Point;
+  path: Path2D;
 }
 
 export interface RenderHooks {
@@ -124,6 +133,9 @@ export class GraphRenderer {
   private readonly abort = new AbortController();
   private readonly layout: LayoutRunner<NodeAttrs, EdgeAttrs>;
   private contourTimer: number | null = null;
+  private contourFrame: number | null = null;
+  private hoverFrame: number | null = null;
+  private hoverPoint: Point | null = null;
   private contourTime = 0;
   private contours: DrawnContour[] = [];
   private activeFolder: string | null = null;
@@ -150,7 +162,7 @@ export class GraphRenderer {
       defaultEdgeColor: DEFAULT_EDGE_COLOR,
       defaultNodeColor: NODE_COLORS.file,
       edgeProgramClasses: { arrow: createEdgeArrowProgram<NodeAttrs, EdgeAttrs>() },
-      hideEdgesOnMove: false,
+      hideEdgesOnMove: true,
       hideLabelsOnMove: true,
       labelColor: { color: readLabelColor(container) },
       labelDensity: RENDER_OPTS.labelDensity,
@@ -159,7 +171,7 @@ export class GraphRenderer {
       renderEdgeLabels: false,
       renderLabels: true,
       stagePadding: RENDER_OPTS.stagePadding,
-      zIndex: true
+      zIndex: false
     });
     this.canvas = this.sigma.createCanvas("contours", { beforeLayer: "edges" });
     const ctx = this.canvas.getContext("2d");
@@ -189,6 +201,7 @@ export class GraphRenderer {
     const didScaleChange = settings.graph.scale !== this.settings.graph.scale;
     this.model = model;
     this.settings = settings;
+    this.cancelHover();
     this.activeFolder = null;
     this.activePoint = null;
     this.syncGraph();
@@ -206,7 +219,12 @@ export class GraphRenderer {
     this.isKilled = true;
     this.layout.kill();
     if (this.contourTimer !== null) window.clearTimeout(this.contourTimer);
+    if (this.contourFrame !== null) window.cancelAnimationFrame(this.contourFrame);
+    if (this.hoverFrame !== null) window.cancelAnimationFrame(this.hoverFrame);
     this.contourTimer = null;
+    this.contourFrame = null;
+    this.hoverFrame = null;
+    this.hoverPoint = null;
     this.abort.abort();
     this.sigma.kill();
     this.label.remove();
@@ -237,6 +255,7 @@ export class GraphRenderer {
       event.preventSigmaDefault();
       this.dragNode = node;
       this.didDrag = false;
+      this.cancelHover();
       this.layout.stop();
       this.sigma.getCamera().disable();
       this.graph.setNodeAttribute(node, "fixed", true);
@@ -247,7 +266,10 @@ export class GraphRenderer {
     });
     window.addEventListener("pointerup", () => this.endDrag(), { signal: this.abort.signal });
     this.container.addEventListener("pointerleave", () => {
-      if (this.dragNode === null) this.setActiveFolder(null, null);
+      if (this.dragNode === null) {
+        this.cancelHover();
+        this.setActiveFolder(null, null);
+      }
     }, { signal: this.abort.signal });
   }
 
@@ -309,8 +331,30 @@ export class GraphRenderer {
       this.sigma.refresh({ partialGraph: { nodes: [this.dragNode] }, skipIndexation: false });
       return;
     }
-    const hovered = [...this.contours].reverse().find((entry) => isInside(point, entry.points));
-    this.setActiveFolder(hovered?.folder.path ?? null, null);
+    this.hoverPoint = point;
+    if (this.hoverFrame !== null) return;
+    this.hoverFrame = window.requestAnimationFrame(() => this.updateHover());
+  }
+
+  private updateHover(): void {
+    this.hoverFrame = null;
+    const point = this.hoverPoint;
+    if (point === null || this.dragNode !== null || this.activePoint !== null || this.isKilled) return;
+    let folder: string | null = null;
+    for (let index = this.contours.length - 1; index >= 0; index -= 1) {
+      const contour = this.contours[index];
+      if (contour !== undefined && isInside(point, contour.points)) {
+        folder = contour.folder.path;
+        break;
+      }
+    }
+    this.setActiveFolder(folder, null);
+  }
+
+  private cancelHover(): void {
+    if (this.hoverFrame !== null) window.cancelAnimationFrame(this.hoverFrame);
+    this.hoverFrame = null;
+    this.hoverPoint = null;
   }
 
   private endDrag(): void {
@@ -335,13 +379,16 @@ export class GraphRenderer {
   }
 
   private scheduleContours(): void {
-    if (this.isKilled || this.contourTimer !== null) return;
+    if (this.isKilled || this.contourTimer !== null || this.contourFrame !== null) return;
     const elapsed = performance.now() - this.contourTime;
     const interval = Math.min(MAX_CONTOUR_DELAY, CONTOUR_DRAW_DELAY + this.graph.order * CONTOUR_NODE_DELAY);
     const delay = Math.max(0, interval - elapsed);
     this.contourTimer = window.setTimeout(() => {
       this.contourTimer = null;
-      this.drawContours();
+      this.contourFrame = window.requestAnimationFrame(() => {
+        this.contourFrame = null;
+        this.drawContours();
+      });
     }, delay);
   }
 
@@ -359,18 +406,27 @@ export class GraphRenderer {
   private drawContours(): void {
     if (this.isKilled) return;
     if (this.contourTimer !== null) window.clearTimeout(this.contourTimer);
+    if (this.contourFrame !== null) window.cancelAnimationFrame(this.contourFrame);
     this.contourTimer = null;
+    this.contourFrame = null;
     this.contourTime = performance.now();
     const contours: DrawnContour[] = [];
+    const cache = new Map<string, Point[]>();
+    const minEdge = this.settings.folder.contourPadding * CONTOUR_MIN_EDGE_FACTOR;
 
     for (const folder of this.model.folders) {
       if (folder.nodes.length < this.settings.folder.minNodes) continue;
       try {
-        const points = this.contourPoints(folder);
+        const points = this.contourPoints(folder, cache);
         if (points.length < 3) continue;
-        const polygon = buildContour(points);
+        const polygon = buildContour(points, minEdge);
         if (polygon.length < 3) continue;
-        contours.push({ folder, points: polygon, center: polygonCenter(polygon) });
+        contours.push({
+          folder,
+          points: polygon,
+          center: polygonCenter(polygon),
+          path: buildContourPath(polygon)
+        });
       } catch {
         continue;
       }
@@ -397,20 +453,27 @@ export class GraphRenderer {
     for (const contour of this.contours) {
       const isActive = contour.folder.path === this.activeFolder;
       const alpha = contourAlpha(contour.folder.depth, maxDepth, this.settings.folder.contourOpacity);
-      paintContour(this.ctx, contour.points, contour.folder.color, alpha, isActive);
+      paintContour(this.ctx, contour.path, contour.folder.color, alpha, isActive);
     }
     this.drawLabel();
   }
 
-  private contourPoints(folder: FolderGroup): Point[] {
+  private contourPoints(folder: FolderGroup, cache: Map<string, Point[]>): Point[] {
     const points: Point[] = [];
     for (const id of folder.nodes) {
+      const cached = cache.get(id);
+      if (cached !== undefined) {
+        points.push(...cached);
+        continue;
+      }
       if (!this.graph.hasNode(id)) continue;
       const attrs = this.graph.getNodeAttributes(id);
       if (attrs.hidden) continue;
       const point = this.sigma.graphToViewport({ x: attrs.x, y: attrs.y });
       const radius = this.settings.folder.contourPadding + attrs.size;
-      points.push(...expandPoint(point, radius));
+      const expanded = expandPoint(point, radius);
+      cache.set(id, expanded);
+      points.push(...expanded);
     }
     return points;
   }
